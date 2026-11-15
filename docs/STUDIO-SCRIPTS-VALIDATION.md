@@ -36,9 +36,16 @@ same-origin mutation headers, bounded JSON bodies, and private validation errors
 
 ## Native app check
 
-The Mac was locked when the app restart and native Run form check were attempted.
-The user was asked to unlock it. The definition and compiled interface are saved;
-restart and visual verification remain pending until the Mac is unlocked.
+After the Mac was unlocked, Studio was restarted normally against the shared
+data store. The native Profiles page retained eight profiles, and the two
+previously open browser profiles were running again after the restart.
+
+The native **Scripts** page displayed exactly one saved **Signup Script (2)**,
+revision 1, with its 900-second limit and ten declared progress stages. The Run
+form displayed a secure account-record field, existing-profile and proxy-source
+selectors, optional profile name and variation seed, sticky-session duration,
+current-desktop option, and **Run script**. Its history said **No runs yet**.
+The Scripts page was left open for the user.
 
 No real account login or new browser profile was started by this feature's
 validation. A real X login remains a separate check with user-supplied account
