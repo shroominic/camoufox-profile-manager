@@ -3,6 +3,7 @@
 
 import argparse
 import hashlib
+import json
 import plistlib
 import shlex
 import shutil
@@ -16,6 +17,7 @@ def main() -> None:
     parser.add_argument("--destination", type=Path, default=Path.home() / "Applications" / "Camoufox Studio.app")
     parser.add_argument("--routine-catalog", type=Path, default=ROOT.parent / "hybrid-control" / "routines" / "catalog.json")
     parser.add_argument("--data-dir", type=Path, help="Use an explicit data folder for a separate test app")
+    parser.add_argument("--script-import-path", type=Path, action="append", help="Local module root for database scripts (repeatable)")
     args = parser.parse_args()
     python = ROOT / ".venv" / "bin" / "python"
     if not python.exists():
@@ -39,6 +41,10 @@ def main() -> None:
     arguments = ""
     if args.data_dir:
         arguments = f" --data-dir {quote(str(args.data_dir.expanduser().resolve()))}"
+    import_paths = args.script_import_path
+    if import_paths is None:
+        import_paths = [path for path in (ROOT.parent / "hybrid-control", ROOT.parent / "proxy-tools") if path.is_dir()]
+    import_paths = [str(path.expanduser().resolve()) for path in import_paths]
     launcher = (
         "#!/bin/zsh\n"
         f"cd {quote(str(ROOT))} || exit 1\n"
@@ -49,6 +55,7 @@ def main() -> None:
         "unset CPM_SECRET_KEY CPM_WEBUI_DIR\n"
         'export CPM_DB_PATH="$HOME/Library/Application Support/Camoufox Profile Manager/profiles.db"\n'
         f"export CPM_ROUTINE_CATALOG_PATH={quote(str(args.routine_catalog.expanduser().resolve()))}\n"
+        f"export CPM_SCRIPT_IMPORT_PATHS={quote(json.dumps(import_paths))}\n"
         f"exec {quote(str(python))} -m camoufox_pm.studio{arguments}\n"
     )
     executable = macos / "CamoufoxStudio"

@@ -3,9 +3,14 @@
 This development fork uses the installed Camoufox Profile Manager's saved data.
 It changes the manager interface; it does not fork the Firefox/Camoufox browser engine.
 
-The first feature is **Routine library** in the sidebar. It reads the external
+**Routine library** in the sidebar reads the external
 recorded-routine catalog and shows counts, duration ranges, length, direction,
 and review status. It does not execute routines or edit recordings.
+
+**Scripts** stores Python source, input forms, and revisions in the separate
+Studio database. Import or edit a definition, enter private input for one run,
+and use the native run history and Stop controls. [Signup Script (2) and the
+generic script format](docs/STUDIO-SCRIPTS.md) reuse the existing setup/login tools.
 
 ## Install the local development app
 
@@ -58,8 +63,9 @@ that is already registered at startup, but it cannot block an old CLI launched
 later. Use the desktop launchers for shared-state testing. Do not run an old
 CLI/web manager against the same folder during Studio use.
 
-No shared-profile schema changes are part of this feature. Future experimental
-metadata will use a separate Studio store. Before an upstream version change,
+No shared-profile schema changes are part of these features. Script definitions
+and run metadata use `studio-control.sqlite3` beside the profile database.
+Before an upstream version change,
 check shared schema compatibility. Close Studio before switching back.
 
 Studio logs go to `studio-control/studio.log` under the shared data directory.
@@ -71,3 +77,4 @@ The catalog endpoint returns allowlisted aggregate metadata only.
 - [Feature integration plan](docs/STUDIO-PLAN.md)
 - [Acceptance criteria](docs/STUDIO-ACCEPTANCE.md)
 - [Validation evidence](docs/STUDIO-VALIDATION.md)
+- [Database scripts and Signup Script (2)](docs/STUDIO-SCRIPTS.md)

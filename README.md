@@ -1,7 +1,7 @@
 # Camoufox Profile Manager
 
 > **Camoufox Studio development fork:** see [Studio setup](STUDIO.md) for the
-> shared-state desktop launcher and Routine library, and the
+> shared-state desktop launcher, Routine library, and database Scripts page, and the
 > [feature plan](docs/STUDIO-PLAN.md) for the next integrations.
 
 [![CI](https://github.com/polyackiy/camoufox-profile-manager/actions/workflows/ci.yml/badge.svg)](https://github.com/polyackiy/camoufox-profile-manager/actions/workflows/ci.yml)

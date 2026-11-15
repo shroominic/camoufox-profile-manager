@@ -12,7 +12,7 @@ The installed manager and Studio must use the same data directory, profile datab
 
 Only one manager may own this data directory at a time. The desktop launcher uses its existing `desktop.lock` boundary. When another manager owns the data, Studio must explain that the other manager must close before Studio can start. It must not delete the lock or stop the other app automatically. A process that does not honor this lock also needs detection before the fork can open shared state.
 
-Fork-only metadata will use a separate, planned `studio-control.sqlite3` file in the shared data directory. This avoids adding experimental tables or fields to the upstream profile schema. The first read-only feature needs no Studio database.
+Fork-only script definitions and run metadata now use a separate `studio-control.sqlite3` file in the shared data directory. This avoids adding experimental tables or fields to the upstream profile schema. The first read-only Routine library feature needs no Studio database.
 
 The same data means changes made in either manager are visible after switching apps. Existing cookies, storage, fingerprints, proxy settings, and encryption material stay in their existing locations. A backup is required before a later integration adds a shared-schema migration. Database backups must use a consistent SQLite snapshot; copying a live database file alone is insufficient.
 
@@ -71,6 +71,13 @@ The recorder is a native signed helper. First integrate status and viewing witho
 Retention starts with usage totals and a reviewable delete selection. Deleting a session must account for routines that refer to its source. Never silently remove source evidence needed by a published routine version.
 
 ## Phase 3: Runs, scripts, and routine composition
+
+The first part is implemented: **Scripts** stores Python source, typed input forms,
+stages, revisions, and run snapshots in the Studio database. It has generic JSON
+import/export, supervised workers, Stop, and explicit recovery attempts. **Signup
+Script (2)** is an imported definition using this same mechanism. See
+[the script guide](STUDIO-SCRIPTS.md). The visual routine composer and scheduler
+integration below remain planned.
 
 Add **Scripts** and a persistent run panel. Reuse the existing Python engine before moving code into a shared package.
 

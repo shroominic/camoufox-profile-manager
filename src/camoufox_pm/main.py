@@ -35,6 +35,7 @@ from camoufox_pm.api.routes import (
     runtime,
     saved_filters,
     schedules,
+    scripts,
     sync,
     system,
     templates,
@@ -46,6 +47,8 @@ from camoufox_pm.core.database import StorageManager
 from camoufox_pm.core.maintenance import MaintenanceBlocked, MaintenanceGate
 from camoufox_pm.core.profile_manager import ProfileManager
 from camoufox_pm.core.scheduler import TaskScheduler
+from camoufox_pm.core.script_runtime import ScriptService
+from camoufox_pm.core.script_store import ScriptStore
 
 settings = get_settings()
 maintenance_gate = MaintenanceGate(
@@ -67,6 +70,7 @@ async def lifespan(app: FastAPI):
     scheduler = None
     backup_task = None
     sync_task = None
+    script_service = None
     try:
         with maintenance_gate.operation():
             maintenance_gate.register_manager()
@@ -76,6 +80,17 @@ async def lifespan(app: FastAPI):
             await profile_manager.initialize()
             set_storage_manager(storage_manager)
             set_profile_manager(profile_manager)
+            script_path = (
+                Path(settings.studio_db_path).expanduser().resolve()
+                if settings.studio_db_path
+                else Path(settings.db_path).expanduser().resolve().parent / "studio-control.sqlite3"
+            )
+            ui_host = "127.0.0.1" if settings.host in ("0.0.0.0", "127.0.0.1") else settings.host
+            script_service = ScriptService(
+                ScriptStore(script_path), f"http://{ui_host}:{settings.port}",
+                import_paths=settings.script_import_paths,
+            )
+            app.state.studio_scripts = script_service
             sync.set_sync_directory(
                 Path(settings.db_path).expanduser().resolve().parent / "sync-control"
             )
@@ -120,6 +135,10 @@ async def lifespan(app: FastAPI):
         # neither a heartbeat nor a recovery task holding the database open.
         logger.info("Shutting down API...")
         try:
+            if script_service is not None:
+                # Stop input workers before closing manager-owned browser sessions.
+                await script_service.shutdown()
+                app.state.studio_scripts = None
             if sync_task is not None:
                 sync_task.cancel()
                 with suppress(asyncio.CancelledError):
@@ -247,6 +266,7 @@ for _prefix, _in_schema in (("/api/v1", True), ("/api", False)):
         (templates.router, "Templates"),
         (saved_filters.router, "Saved views"),
         (routine_library.router, "Routine library"),
+        (scripts.router, "Scripts"),
     ):
         app.include_router(
             _router,

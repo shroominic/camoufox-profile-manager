@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { BookOpen, CalendarClock, Copy, Layers, LogOut, Puzzle, Settings, Network, Trash2, Users, Shield } from 'lucide-react'
+import { BookOpen, CalendarClock, Code2, Copy, Layers, LogOut, Puzzle, Settings, Network, Trash2, Users, Shield } from 'lucide-react'
 
 import { useI18n } from '@/components/i18n-provider'
 import { LanguageSelector } from '@/components/language-selector'
@@ -17,6 +17,7 @@ const NAV = [
   { href: '/extensions/', label: 'Extensions', icon: Puzzle },
   { href: '/groups/', label: 'Groups', icon: Layers },
   { href: '/schedules/', label: 'Schedules', icon: CalendarClock },
+  { href: '/scripts/', label: 'Scripts', icon: Code2 },
   { href: '/routine-library/', label: 'Routine library', icon: BookOpen },
   { href: '/trash/', label: 'Trash', icon: Trash2 },
   { href: '/access/', label: 'Access and activity', icon: Shield },
