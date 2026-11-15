@@ -17,6 +17,10 @@ class AlreadyRunningError(RuntimeError):
     """The same desktop data directory is already open in another process."""
 
 
+class DesktopShutdownError(RuntimeError):
+    """The API may still be running; retain ownership until the process exits."""
+
+
 @contextlib.contextmanager
 def _instance_lock(data_dir: Path):
     """Hold an OS lock for the process lifetime; crashes release it automatically."""
@@ -83,6 +87,16 @@ def run_desktop(
     host: str = "127.0.0.1", port: int = 0, title: str = "Camoufox Profile Manager"
 ) -> None:
     """Serve on a reserved socket and stop browsers/server when the window closes."""
+    from camoufox_pm.config import bootstrap_desktop, get_settings
+
+    bootstrap_desktop()
+    settings = get_settings()
+    with _instance_lock(Path(settings.db_path).resolve().parent):
+        _run_desktop_locked(host=host, port=port, title=title)
+
+
+def _run_desktop_locked(host: str, port: int, title: str) -> None:
+    """Serve only after the caller holds the shared desktop data lock."""
     try:
         import webview
     except ImportError as exc:  # pragma: no cover - optional dependency
@@ -90,82 +104,79 @@ def run_desktop(
             "Desktop mode needs pywebview. From source, run: uv sync --extra desktop"
         ) from exc
 
-    from camoufox_pm.config import bootstrap_desktop, get_settings
+    from camoufox_pm.config import get_settings
 
-    bootstrap_desktop()
-    settings = get_settings()
-    with _instance_lock(Path(settings.db_path).resolve().parent):
-        # Bind before starting uvicorn: port=0 chooses an available port, and an
-        # explicit occupied port fails before any webview can open the wrong app.
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as listener:
-            if sys.platform == "win32":
-                # Windows SO_REUSEADDR can permit another process to steal a port.
-                listener.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
-            else:
-                listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-            try:
-                listener.bind((host, port))
-            except OSError as exc:
+    # Bind before starting uvicorn: port=0 chooses an available port, and an
+    # explicit occupied port fails before any webview can open the wrong app.
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as listener:
+        if sys.platform == "win32":
+            # Windows SO_REUSEADDR can permit another process to steal a port.
+            listener.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
+        else:
+            listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        try:
+            listener.bind((host, port))
+        except OSError as exc:
+            raise RuntimeError(
+                f"Cannot start on {host}:{port}. Close the app using that port, "
+                "or start Camoufox Profile Manager without a fixed port."
+            ) from exc
+        listener.listen(128)
+        actual_port = listener.getsockname()[1]
+        os.environ["CPM_HOST"] = host
+        os.environ["CPM_PORT"] = str(actual_port)
+        get_settings.cache_clear()
+        from camoufox_pm.main import app
+
+        server = uvicorn.Server(
+            uvicorn.Config(app, host=host, port=actual_port, log_level="info")
+        )
+        thread = threading.Thread(
+            target=server.run, kwargs={"sockets": [listener]}, daemon=True
+        )
+        thread.start()
+        try:
+            if not _wait_until_serving(server, thread):
                 raise RuntimeError(
-                    f"Cannot start on {host}:{port}. Close the app using that port, "
-                    "or start Camoufox Profile Manager without a fixed port."
-                ) from exc
-            listener.listen(128)
-            actual_port = listener.getsockname()[1]
-            os.environ["CPM_HOST"] = host
-            os.environ["CPM_PORT"] = str(actual_port)
-            get_settings.cache_clear()
-            from camoufox_pm.main import app
-
-            server = uvicorn.Server(
-                uvicorn.Config(app, host=host, port=actual_port, log_level="info")
-            )
-            thread = threading.Thread(
-                target=server.run, kwargs={"sockets": [listener]}, daemon=True
-            )
-            thread.start()
-            try:
-                if not _wait_until_serving(server, thread):
-                    raise RuntimeError(
-                        "The local server could not start. See desktop.log in your data folder."
-                    )
-                ui_host = "127.0.0.1" if host in ("0.0.0.0", "127.0.0.1") else host
-                window = webview.create_window(
-                    title, f"http://{ui_host}:{actual_port}/", width=1280, height=800
+                    "The local server could not start. See desktop.log in your data folder."
                 )
-                if window is None:
-                    raise RuntimeError("The native window could not be created.")
+            ui_host = "127.0.0.1" if host in ("0.0.0.0", "127.0.0.1") else host
+            window = webview.create_window(
+                title, f"http://{ui_host}:{actual_port}/", width=1280, height=800
+            )
+            if window is None:
+                raise RuntimeError("The native window could not be created.")
 
-                def monitor_updates():
-                    from camoufox_pm.core.update_runtime import _record
+            def monitor_updates():
+                from camoufox_pm.core.update_runtime import _record
 
-                    while thread.is_alive():
-                        if (_record() or {}).get("action"):
-                            window.destroy()
-                            return
-                        time.sleep(0.5)
+                while thread.is_alive():
+                    if (_record() or {}).get("action"):
+                        window.destroy()
+                        return
+                    time.sleep(0.5)
 
-                threading.Thread(target=monitor_updates, daemon=True).start()
-                if sys.platform == "darwin":
-                    # Cocoa Cmd+Q may terminate NSApplication without returning
-                    # from webview.start(). Its synchronous closing event must
-                    # finish API/browser cleanup first (False cancels the quit).
-                    window.events.closing += lambda: _stop_server(server, thread)
-                if sys.platform.startswith("linux"):
-                    icon_root = Path(
-                        getattr(sys, "_MEIPASS", Path(__file__).resolve().parents[2] / "packaging")
-                    )
-                    webview.start(icon=str(icon_root / "camoufox-pm.svg"))
-                else:
-                    webview.start()
-            finally:
-                # Lifespan closes running browser sessions and the database.
-                if not _stop_server(server, thread):
-                    raise RuntimeError("The local server did not finish shutting down.")
-                from camoufox_pm.core.update_runtime import _record, spawn_helper
+            threading.Thread(target=monitor_updates, daemon=True).start()
+            if sys.platform == "darwin":
+                # Cocoa Cmd+Q may terminate NSApplication without returning
+                # from webview.start(). Its synchronous closing event must
+                # finish API/browser cleanup first (False cancels the quit).
+                window.events.closing += lambda: _stop_server(server, thread)
+            if sys.platform.startswith("linux"):
+                icon_root = Path(
+                    getattr(sys, "_MEIPASS", Path(__file__).resolve().parents[2] / "packaging")
+                )
+                webview.start(icon=str(icon_root / "camoufox-pm.svg"))
+            else:
+                webview.start()
+        finally:
+            # Lifespan closes running browser sessions and the database.
+            if not _stop_server(server, thread):
+                raise DesktopShutdownError("The local server did not finish shutting down.")
+            from camoufox_pm.core.update_runtime import _record, spawn_helper
 
-                if (_record() or {}).get("action"):
-                    spawn_helper()
+            if (_record() or {}).get("action"):
+                spawn_helper()
 
 
 def finish_packaged_desktop() -> None:

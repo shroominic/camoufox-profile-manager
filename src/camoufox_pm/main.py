@@ -31,6 +31,7 @@ from camoufox_pm.api.routes import (
     profiles,
     proxies,
     recovery,
+    routine_library,
     runtime,
     saved_filters,
     schedules,
@@ -245,6 +246,7 @@ for _prefix, _in_schema in (("/api/v1", True), ("/api", False)):
         (extensions.router, "Extensions"),
         (templates.router, "Templates"),
         (saved_filters.router, "Saved views"),
+        (routine_library.router, "Routine library"),
     ):
         app.include_router(
             _router,

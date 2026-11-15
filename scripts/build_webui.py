@@ -8,6 +8,7 @@ the UI on the same origin as the API. Requires Node.js.
     python scripts/build_webui.py
 """
 
+import argparse
 import os
 import shutil
 import subprocess
@@ -29,6 +30,9 @@ def _npm() -> str:
 
 
 def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--webpack", action="store_true", help="Use the standard Webpack builder")
+    args = parser.parse_args()
     if not (WEB / "package.json").exists():
         print("web/ not found; run from the repository root", file=sys.stderr)
         return 1
@@ -42,7 +46,10 @@ def main() -> int:
     # Pass NEXT_EXPORT via the environment (cross-platform) rather than an inline
     # shell prefix, so the build works on Windows too.
     env = {**os.environ, "NEXT_EXPORT": "1"}
-    subprocess.run([npm, "run", "build:static"], cwd=WEB, check=True, env=env)
+    command = [npm, "run", "build:static"]
+    if args.webpack:
+        command.extend(["--", "--webpack"])
+    subprocess.run(command, cwd=WEB, check=True, env=env)
 
     if not OUT.is_dir():
         print("Expected export at web/out was not produced", file=sys.stderr)

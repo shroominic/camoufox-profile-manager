@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { CalendarClock, Copy, Layers, LogOut, Puzzle, Settings, Network, Trash2, Users, Shield } from 'lucide-react'
+import { BookOpen, CalendarClock, Copy, Layers, LogOut, Puzzle, Settings, Network, Trash2, Users, Shield } from 'lucide-react'
 
 import { useI18n } from '@/components/i18n-provider'
 import { LanguageSelector } from '@/components/language-selector'
@@ -17,6 +17,7 @@ const NAV = [
   { href: '/extensions/', label: 'Extensions', icon: Puzzle },
   { href: '/groups/', label: 'Groups', icon: Layers },
   { href: '/schedules/', label: 'Schedules', icon: CalendarClock },
+  { href: '/routine-library/', label: 'Routine library', icon: BookOpen },
   { href: '/trash/', label: 'Trash', icon: Trash2 },
   { href: '/access/', label: 'Access and activity', icon: Shield },
   { href: '/settings/', label: 'Settings', icon: Settings },
@@ -101,6 +102,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
  * funnelled through one control surface. Drawn inline, no image request.
  */
 function Wordmark() {
+  const { t } = useI18n()
   return (
     <>
       <svg width="17" height="17" viewBox="0 0 16 16" fill="none" aria-hidden="true">
@@ -108,7 +110,7 @@ function Wordmark() {
         <rect x="3" y="6.8" width="10" height="2.4" rx="1.2" fill="var(--color-signal)" opacity="0.62" />
         <rect x="5.5" y="11.1" width="5" height="2.4" rx="1.2" fill="var(--color-signal)" opacity="0.32" />
       </svg>
-      <span className="text-[13px] font-semibold tracking-tight">Camoufox</span>
+      <span className="text-[13px] font-semibold tracking-tight">Camoufox <span className="text-[10px] font-normal text-signal">{t('Studio')}</span></span>
     </>
   )
 }

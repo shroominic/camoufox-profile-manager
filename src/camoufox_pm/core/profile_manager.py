@@ -141,6 +141,9 @@ class ProfileManager:
             if "screen" not in asked_for and described.get("screen"):
                 profile.browser_settings.screen = described["screen"]
 
+            # Set the managed location before launch options can assign a
+            # cwd-relative default as a side effect.
+            profile.get_storage_path(str(self.profiles_dir))
             profile.fingerprint = fingerprint_store.resolve(
                 profile.to_camoufox_launch_options(), preset=preset
             )

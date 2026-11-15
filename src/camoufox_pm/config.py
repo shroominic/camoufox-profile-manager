@@ -22,6 +22,8 @@ class Settings(BaseSettings):
     db_path: str = "data/profiles.db"
     secret_key: str | None = None
     webui_dir: str | None = None
+    # Local read-only catalog. Never imported as code or copied into profile data.
+    routine_catalog_path: str | None = None
     # Lifetime of a login session. Sessions are stored server-side, so shortening
     # this takes effect for existing sessions on their next request.
     session_ttl_hours: int = 168

@@ -1,5 +1,9 @@
 # Camoufox Profile Manager
 
+> **Camoufox Studio development fork:** see [Studio setup](STUDIO.md) for the
+> shared-state desktop launcher and Routine library, and the
+> [feature plan](docs/STUDIO-PLAN.md) for the next integrations.
+
 [![CI](https://github.com/polyackiy/camoufox-profile-manager/actions/workflows/ci.yml/badge.svg)](https://github.com/polyackiy/camoufox-profile-manager/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
