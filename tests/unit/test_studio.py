@@ -112,7 +112,8 @@ def test_existing_database_without_key_does_not_get_replacement(tmp_path, monkey
     assert not (tmp_path / "secret.key").exists()
 
 
-def test_bootstrap_and_server_run_only_while_lock_is_held(tmp_path, monkeypatch):
+@pytest.mark.parametrize("separate_data", [False, True])
+def test_bootstrap_and_server_run_only_while_lock_is_held(tmp_path, monkeypatch, separate_data):
     calls = []
 
     def assert_owned():
@@ -128,12 +129,17 @@ def test_bootstrap_and_server_run_only_while_lock_is_held(tmp_path, monkeypatch)
     def serve(**kwargs):
         assert_owned()
         assert kwargs["host"] == "127.0.0.1"
-        assert kwargs["title"] == studio.TITLE
+        expected_title = studio.SEPARATE_DATA_TITLE if separate_data else studio.TITLE
+        assert kwargs["title"] == expected_title
         calls.append("serve")
 
     monkeypatch.setattr(studio, "bootstrap_desktop", bootstrap)
     monkeypatch.setattr(studio, "_run_desktop_locked", serve)
-    assert studio.main(["--data-dir", str(tmp_path), "--no-dialog"]) == 0
+    monkeypatch.setenv("CPM_DB_PATH", str(tmp_path / "profiles.db"))
+    arguments = ["--no-dialog"]
+    if separate_data:
+        arguments.extend(["--data-dir", str(tmp_path)])
+    assert studio.main(arguments) == 0
     assert calls == ["bootstrap", "serve"]
     with _instance_lock(tmp_path):
         pass

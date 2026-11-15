@@ -24,6 +24,7 @@ from camoufox_pm.desktop import (
 )
 
 TITLE = "Camoufox Studio · Development"
+SEPARATE_DATA_TITLE = "Camoufox Studio · Preview · Separate data"
 CLOSE_OTHER = (
     "Close Camoufox Profile Manager or the other Camoufox Studio window, then open "
     "Camoufox Studio again. Both apps use the same profiles and saved browser data. "
@@ -140,6 +141,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--no-dialog", action="store_true", help="Print startup errors to stderr")
     parser.add_argument("--port", type=int, default=0, help="Loopback port (default: choose a free port)")
     args = parser.parse_args(argv)
+    title = SEPARATE_DATA_TITLE if args.data_dir else TITLE
     database = database_path(args.data_dir)
     directory = database.parent
     # Pin all startup code to this exact data folder. No cwd-relative data copy.
@@ -160,7 +162,7 @@ def main(argv: list[str] | None = None) -> int:
                 try:
                     sys.stdout = sys.stderr = log
                     try:
-                        _run_desktop_locked(host="127.0.0.1", port=args.port, title=TITLE)
+                        _run_desktop_locked(host="127.0.0.1", port=args.port, title=title)
                     except DesktopShutdownError as exc:
                         # A live API thread must never outlive desktop.lock. Keep the
                         # guard during the dialog, then let process exit release it.

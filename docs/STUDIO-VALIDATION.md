@@ -42,6 +42,17 @@ claimed. Close the original manager normally, then open the installed Studio
 app to use that shared state. The original CLI/web manager limitation is explained
 in [STUDIO.md](../STUDIO.md).
 
+### Follow-up: shared-data window confirmed
+
+The empty preview was closed. After the original manager had no running browsers,
+it was closed normally and the installed shared-data Studio app was opened.
+Its native Profiles page displayed eight saved profiles from the existing store.
+No import or profile copy was used. The shared-data Studio window was left open.
+
+Explicit `--data-dir` launches now say **Preview · Separate data** in their native
+window title. The default installed app keeps its standard development title.
+All 21 focused startup tests passed after this label change.
+
 ## Code checks
 
 - 98 focused Python tests passed with `--no-network` and loopback access.
