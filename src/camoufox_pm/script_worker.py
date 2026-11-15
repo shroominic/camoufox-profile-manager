@@ -21,12 +21,27 @@ MAX_PACKET = 4 * 1024 * 1024
 ERROR_CODES = {
     "script_error", "stopped", "timeout", "worker_unavailable", "worker_protocol_error",
     "interrupted", "dependency_unavailable", "preflight_failed", "invalid_inputs",
+    "login_target_changed", "login_field_focus", "login_field_type", "login_page_timeout",
+    "login_manual_action", "login_state_unavailable",
 }
+
+
+def safe_error_code(code):
+    """A dependency can publish one fixed reason, never exception text or data."""
+    return code if type(code) is str and code in ERROR_CODES else "script_error"
+
+
+def exception_error_code(error):
+    try:
+        return safe_error_code(getattr(error, "code", None))
+    except BaseException:
+        # A custom exception property must not replace the private-error boundary.
+        return "script_error"
 
 
 class ScriptFailure(Exception):
     def __init__(self, code):
-        self.code = code if code in ERROR_CODES else "script_error"
+        self.code = safe_error_code(code)
 
 
 def secret_tokens(definition, inputs, headers=None):
@@ -188,13 +203,13 @@ def main():
             emit({"kind": "error", "error_code": "stopped"})
             return 130
         except ScriptFailure as exc:
-            emit({"kind": "error", "error_code": exc.code})
+            emit({"kind": "error", "error_code": exception_error_code(exc)})
             return 1
         except ModuleNotFoundError:
             emit({"kind": "error", "error_code": "dependency_unavailable"})
             return 1
-        except BaseException:
-            emit({"kind": "error", "error_code": "script_error"})
+        except BaseException as error:
+            emit({"kind": "error", "error_code": exception_error_code(error)})
             return 1
 
 

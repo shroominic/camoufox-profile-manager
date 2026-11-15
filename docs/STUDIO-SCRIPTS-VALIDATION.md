@@ -50,3 +50,28 @@ The Scripts page was left open for the user.
 No real account login or new browser profile was started by this feature's
 validation. A real X login remains a separate check with user-supplied account
 input in the app's private form.
+
+## Homepage-first correction, 16 November 2026
+
+A user-run attempt reached **Use password**, then failed before any
+`password_filled` stage. The saved trace did not contain the exact old exception,
+so this evidence does not identify one unique cause. No credential value was
+recovered from the failed attempt.
+
+The configured local auth toolkit now opens the X homepage and waits for loaded,
+stable live controls between steps. Hidden background protection frames and an
+ordinary login legal footer do not count as an interactive challenge or updated
+terms prompt; visible challenges and explicit acceptance prompts still stop.
+The runner and Scripts UI now accept six fixed login error categories.
+
+Validation: 271 hybrid unit tests, 178 focused manager tests, and 33 web tests
+passed. A temporary headless Camoufox browser completed homepage → Sign in →
+identifier → Use password → password → authenticator against a local fixture
+using public dummy credentials. The fixture has delayed transitions and a
+real-style password form with a read-only email field and Continue button.
+
+Studio was restarted and its revision-1 definition and original failed run are
+still present. The definition source was not changed, so revision checks do not
+invalidate an explicit Resume. The failed browser profile was found in Trash;
+it was not restored automatically. The three active user profiles were left
+unchanged. No real login was retried during this correction.

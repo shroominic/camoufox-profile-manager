@@ -28,6 +28,12 @@ const ERROR_LABELS: Record<string, string> = {
   dependency_unavailable: 'A script dependency is unavailable. Check the local tool setup.',
   preflight_failed: 'The script could not pass its startup checks. No new run should be started until its saved state is checked.',
   invalid_inputs: 'The script inputs were not valid. Enter them again before retrying.',
+  login_target_changed: 'The login page or target changed. The saved profile is kept. Review the page before resuming.',
+  login_field_focus: 'The login field lost focus. The saved profile is kept. Review the page before resuming.',
+  login_field_type: 'The login field type did not match the expected input. No further credentials were sent.',
+  login_page_timeout: 'The next login page did not finish loading. The saved profile is kept.',
+  login_manual_action: 'Login requires manual action. Check the browser for a challenge, account notice, or verification choice.',
+  login_state_unavailable: 'The login page state could not be read. The saved profile is kept.',
 }
 const EMPTY_DEFINITION: ScriptDefinition = {
   name: '', description: '', language: 'python', code: 'context.stage("started")\n', inputs: [],

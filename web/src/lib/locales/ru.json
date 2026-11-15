@@ -1495,5 +1495,11 @@
   "Time limit: {seconds} seconds": "Ограничение времени: {seconds} секунд",
   "Waiting to start": "Ожидание запуска",
   "The run needs attention. Check its saved state before starting another run.": "Запуск требует проверки. Перед новым запуском проверьте его сохранённое состояние.",
-  "Resume reuses the saved run state. Enter private inputs again. A saved profile or browser window may still be open.": "Возобновление использует сохранённое состояние запуска. Введите конфиденциальные параметры заново. Сохранённый профиль или окно браузера могут оставаться открытыми."
+  "Resume reuses the saved run state. Enter private inputs again. A saved profile or browser window may still be open.": "Возобновление использует сохранённое состояние запуска. Введите конфиденциальные параметры заново. Сохранённый профиль или окно браузера могут оставаться открытыми.",
+  "The login page or target changed. The saved profile is kept. Review the page before resuming.": "Страница или элемент входа изменились. Сохранённый профиль оставлен. Проверьте страницу перед продолжением.",
+  "The login field lost focus. The saved profile is kept. Review the page before resuming.": "Поле входа потеряло фокус. Сохранённый профиль оставлен. Проверьте страницу перед продолжением.",
+  "The login field type did not match the expected input. No further credentials were sent.": "Тип поля входа не соответствует ожидаемым данным. Дальнейшая отправка учётных данных остановлена.",
+  "The next login page did not finish loading. The saved profile is kept.": "Следующая страница входа не завершила загрузку. Сохранённый профиль оставлен.",
+  "Login requires manual action. Check the browser for a challenge, account notice, or verification choice.": "Для входа требуется действие пользователя. Проверьте запрос проверки, уведомление об учётной записи или выбор способа подтверждения в браузере.",
+  "The login page state could not be read. The saved profile is kept.": "Не удалось прочитать состояние страницы входа. Сохранённый профиль оставлен."
 }

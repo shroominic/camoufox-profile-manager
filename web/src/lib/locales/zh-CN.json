@@ -1360,5 +1360,11 @@
   "Time limit: {seconds} seconds": "时间上限：{seconds} 秒",
   "Waiting to start": "等待启动",
   "The run needs attention. Check its saved state before starting another run.": "此运行需要处理。启动其他运行前请检查其保存状态。",
-  "Resume reuses the saved run state. Enter private inputs again. A saved profile or browser window may still be open.": "继续运行将重用保存的运行状态。请重新输入私密信息。已保存的配置或浏览器窗口可能仍处于打开状态。"
+  "Resume reuses the saved run state. Enter private inputs again. A saved profile or browser window may still be open.": "继续运行将重用保存的运行状态。请重新输入私密信息。已保存的配置或浏览器窗口可能仍处于打开状态。",
+  "The login page or target changed. The saved profile is kept. Review the page before resuming.": "登录页面或目标已更改。已保留保存的配置。继续前请检查页面。",
+  "The login field lost focus. The saved profile is kept. Review the page before resuming.": "登录字段失去焦点。已保留保存的配置。继续前请检查页面。",
+  "The login field type did not match the expected input. No further credentials were sent.": "登录字段类型与预期输入不符。未继续发送凭据。",
+  "The next login page did not finish loading. The saved profile is kept.": "下一个登录页面未完成加载。已保留保存的配置。",
+  "Login requires manual action. Check the browser for a challenge, account notice, or verification choice.": "登录需要手动操作。请检查浏览器中的验证挑战、账号通知或验证方式选项。",
+  "The login page state could not be read. The saved profile is kept.": "无法读取登录页面状态。已保留保存的配置。"
 }

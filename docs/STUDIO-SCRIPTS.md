@@ -75,8 +75,11 @@ The script then:
 3. Creates fresh browser storage and a new fingerprint, with US English and
    `America/Los_Angeles` time.
 4. Selects a new macOS desktop and launches the profile there.
-5. Signs in through email, **Use password**, password, and local authenticator
-   code. The username is available for an extra account check.
+5. Opens `https://x.com/`, waits for a loaded homepage and stable **Sign in**
+   control, then selects it. It waits for the identifier form before entering
+   email, then waits between **Use password**, the concealed password field,
+   and the local authenticator challenge. The username is available for an extra
+   account check. It does not enter by opening a login deep link.
 6. Verifies a signed-in page, then restores recording only if it was known to be
    running and enabled before this run.
 
@@ -94,6 +97,10 @@ rejected credentials, account locks, unexpected verification, or terms requiring
 review stop the login for manual action.
 
 ## Private input and recovery
+
+Login failures now have fixed categories for a changed target, wrong field focus
+or type, page-load timeout, manual action, and unavailable browser state. Arbitrary
+exception text, page content, and credential values are never shown as an error.
 
 Run input is kept in memory and passed to the worker through a private pipe.
 The script definition, database run rows, URLs, process arguments, normal logs,
@@ -147,3 +154,9 @@ other account routines.
 The original setup backend passed local dummy-account and desktop tests. A real
 X account login remains a separate validation step. Viewing, importing, or saving
 this definition does not execute it.
+
+On 16 November 2026, the updated homepage-first flow also passed a real headless
+local browser check with public dummy credentials, delayed page transitions,
+a read-only email field beside the password field, a normal legal footer, and
+a hidden background protection widget. The test completed password and local
+authenticator submission without sending an authenticator secret.
