@@ -1370,5 +1370,11 @@
   "No saved proxy account is available. Add one in Proxy library and select it before creating a profile.": "没有可用的已保存代理账户。请在代理库中添加账户，并在创建配置前选择它。",
   "More than one saved proxy account is available. Select one before creating a profile.": "有多个可用的已保存代理账户。请在创建配置前选择一个。",
   "The selected proxy account is unavailable or incomplete. Check it in Proxy library before trying again.": "所选代理账户不可用或信息不完整。重试前请在代理库中检查它。",
+  "Studio needs macOS Accessibility and System Events access to select a desktop. Allow access for Camoufox Studio, then retry. Any saved profile is kept.": "Studio 需要 macOS 辅助功能和 System Events 权限才能选择桌面。请允许 Camoufox Studio 访问后重试。已保存的配置都会保留。",
+  "Mission Control desktop controls are unavailable. Unlock the Mac, check Mission Control, and resume the saved run. The profile is kept.": "调度中心的桌面控件不可用。请解锁 Mac，检查调度中心，然后继续保存的运行。配置已保留。",
+  "Desktop selection timed out. Check Mission Control before resuming. The profile is kept; desktop creation will not repeat automatically.": "选择桌面超时。继续前请检查调度中心。配置已保留；不会自动重复创建桌面。",
+  "macOS could not add a desktop. Close an unused desktop, or select a desktop and resume with Use current desktop. The profile is kept.": "macOS 无法添加桌面。请关闭未使用的桌面，或选择一个桌面并使用“使用当前桌面”继续运行。配置已保留。",
+  "A desktop may have been added, but its selection is unconfirmed. Check Mission Control, select the intended desktop, and resume with Use current desktop. The profile is kept.": "可能已添加桌面，但尚未确认选择。请检查调度中心，选择目标桌面，并使用“使用当前桌面”继续运行。配置已保留。",
+  "An earlier run already attempted desktop setup. Select the intended desktop and resume with Use current desktop. The saved profile will be reused.": "之前的运行已尝试设置桌面。请选择目标桌面，并使用“使用当前桌面”继续运行。将重复使用已保存的配置。",
   "Add a proxy in Proxy library before creating a profile.": "创建配置前，请在代理库中添加代理。"
 }

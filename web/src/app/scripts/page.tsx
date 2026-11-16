@@ -38,6 +38,12 @@ const ERROR_LABELS: Record<string, string> = {
   missing_proxy_source: 'No saved proxy account is available. Add one in Proxy library and select it before creating a profile.',
   ambiguous_proxy_source: 'More than one saved proxy account is available. Select one before creating a profile.',
   proxy_source_invalid: 'The selected proxy account is unavailable or incomplete. Check it in Proxy library before trying again.',
+  desktop_permission_required: 'Studio needs macOS Accessibility and System Events access to select a desktop. Allow access for Camoufox Studio, then retry. Any saved profile is kept.',
+  desktop_controls_unavailable: 'Mission Control desktop controls are unavailable. Unlock the Mac, check Mission Control, and resume the saved run. The profile is kept.',
+  desktop_timeout: 'Desktop selection timed out. Check Mission Control before resuming. The profile is kept; desktop creation will not repeat automatically.',
+  desktop_limit: 'macOS could not add a desktop. Close an unused desktop, or select a desktop and resume with Use current desktop. The profile is kept.',
+  desktop_selection_uncertain: 'A desktop may have been added, but its selection is unconfirmed. Check Mission Control, select the intended desktop, and resume with Use current desktop. The profile is kept.',
+  desktop_recovery_required: 'An earlier run already attempted desktop setup. Select the intended desktop and resume with Use current desktop. The saved profile will be reused.',
 }
 const EMPTY_DEFINITION: ScriptDefinition = {
   name: '', description: '', language: 'python', code: 'context.stage("started")\n', inputs: [],

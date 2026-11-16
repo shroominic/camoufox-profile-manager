@@ -27,6 +27,19 @@ Python environment. Keep the checkout in place. Rebuild the web UI after fronten
 edits; restart Studio after Python edits. The original app and its environment
 are separate.
 
+The installed app has a compiled AppKit/WKWebView host. Python runs the local
+backend, without opening a second Python GUI. The native host retains the app's
+macOS identity and closes the backend through a private pipe. Normal Quit and
+parent exit request browser cleanup before the shared-state lock is released.
+Building this host requires Apple's command line tools.
+
+Desktop setup needs **Camoufox Studio** access in Privacy & Security →
+Accessibility, plus its System Events automation approval. This is app access;
+do not enable a general Python interpreter as a substitute. A read-only check
+runs inside the actual script worker before a new profile is created or the
+recorder is stopped. Missing access produces a fixed desktop permission error.
+Current-desktop mode and an already running profile do not need desktop control.
+
 For a terminal launch, set the catalog path and use the guarded entry point:
 
 ```sh

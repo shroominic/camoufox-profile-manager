@@ -4,9 +4,11 @@
 import argparse
 import hashlib
 import json
+import platform
 import plistlib
-import shlex
 import shutil
+import subprocess
+import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -33,49 +35,68 @@ def main() -> None:
         info_path = destination / "Contents" / "Info.plist"
         if not info_path.is_file() or plistlib.loads(info_path.read_bytes()).get("CFBundleIdentifier") not in (identity, "local.camoufox.studio"):
             parser.error("Destination belongs to another app; choose a new path")
-    macos = destination / "Contents" / "MacOS"
-    resources = destination / "Contents" / "Resources"
-    macos.mkdir(parents=True, exist_ok=True)
-    resources.mkdir(parents=True, exist_ok=True)
-    quote = shlex.quote
-    arguments = ""
-    if args.data_dir:
-        arguments = f" --data-dir {quote(str(args.data_dir.expanduser().resolve()))}"
     import_paths = args.script_import_path
     if import_paths is None:
         import_paths = [path for path in (ROOT.parent / "hybrid-control", ROOT.parent / "proxy-tools") if path.is_dir()]
     import_paths = [str(path.expanduser().resolve()) for path in import_paths]
-    launcher = (
-        "#!/bin/zsh\n"
-        f"cd {quote(str(ROOT))} || exit 1\n"
-        # CPython 3.13 skips Finder-hidden editable .pth files on macOS.
-        # Pin imports to this checkout even when that metadata is inherited.
-        f"export PYTHONPATH={quote(str(ROOT / 'src'))}\n"
-        # An app opened by Finder must not inherit an unrelated shell data override.
-        "unset CPM_SECRET_KEY CPM_WEBUI_DIR\n"
-        'export CPM_DB_PATH="$HOME/Library/Application Support/Camoufox Profile Manager/profiles.db"\n'
-        f"export CPM_ROUTINE_CATALOG_PATH={quote(str(args.routine_catalog.expanduser().resolve()))}\n"
-        f"export CPM_SCRIPT_IMPORT_PATHS={quote(json.dumps(import_paths))}\n"
-        f"exec {quote(str(python))} -m camoufox_pm.studio{arguments}\n"
-    )
-    executable = macos / "CamoufoxStudio"
-    executable.write_text(launcher)
-    executable.chmod(0o755)
+    configuration = {
+        "version": 1,
+        "root": str(ROOT),
+        "python": str(python),
+        "database": str(Path.home() / "Library/Application Support/Camoufox Profile Manager/profiles.db"),
+        "routineCatalog": str(args.routine_catalog.expanduser().resolve()),
+        "scriptImportPaths": import_paths,
+        "dataDirectory": str(args.data_dir.expanduser().resolve()) if args.data_dir else None,
+    }
     info = {
         "CFBundleName": display_name,
         "CFBundleDisplayName": display_name,
         "CFBundleIdentifier": identity,
         "CFBundleExecutable": "CamoufoxStudio",
         "CFBundlePackageType": "APPL",
-        "CFBundleVersion": "1",
-        "CFBundleShortVersionString": "0.7.0-studio.1",
+        "CFBundleVersion": "2",
+        "CFBundleShortVersionString": "0.7.0-studio.2",
         "NSHighResolutionCapable": True,
+        "NSAppleEventsUsageDescription": (
+            "Studio uses System Events to create and select the browser profile's macOS desktop."
+        ),
     }
-    icon = ROOT / "packaging" / "camoufox-pm.icns"
-    if icon.is_file():
-        shutil.copy2(icon, resources / "studio.icns")
-        info["CFBundleIconFile"] = "studio.icns"
-    (destination / "Contents" / "Info.plist").write_bytes(plistlib.dumps(info))
+    if platform.system() != "Darwin":
+        parser.error("The native Studio app must be built on macOS")
+    compiler = shutil.which("swiftc")
+    if compiler is None:
+        parser.error("Install Apple's command line tools before building the native Studio app")
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    # Compile and sign the entire replacement before changing the installed app.
+    with tempfile.TemporaryDirectory(prefix=".camoufox-studio-build-", dir=destination.parent) as temporary:
+        staging = Path(temporary) / destination.name
+        macos = staging / "Contents" / "MacOS"
+        resources = staging / "Contents" / "Resources"
+        macos.mkdir(parents=True)
+        resources.mkdir(parents=True)
+        executable = macos / "CamoufoxStudio"
+        subprocess.run([
+            compiler, "-parse-as-library", "-O", "-module-name", "CamoufoxStudioLauncher",
+            "-target", f"{platform.machine()}-apple-macos14.0",
+            str(ROOT / "packaging" / "studio_launcher.swift"), "-o", str(executable),
+            "-framework", "AppKit", "-framework", "WebKit",
+        ], check=True)
+        (resources / "studio-runtime.json").write_text(json.dumps(configuration, indent=2) + "\n")
+        icon = ROOT / "packaging" / "camoufox-pm.icns"
+        if icon.is_file():
+            shutil.copy2(icon, resources / "studio.icns")
+            info["CFBundleIconFile"] = "studio.icns"
+        (staging / "Contents" / "Info.plist").write_bytes(plistlib.dumps(info))
+        subprocess.run(["/usr/bin/codesign", "--force", "--sign", "-", str(staging)], check=True)
+        previous = Path(temporary) / "previous.app"
+        if destination.exists():
+            destination.rename(previous)
+        try:
+            staging.rename(destination)
+        except BaseException:
+            if previous.exists():
+                previous.rename(destination)
+            raise
     print(destination)
 
 

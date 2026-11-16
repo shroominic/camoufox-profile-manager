@@ -72,6 +72,12 @@ source stops the run with a fixed proxy error before profile creation. Studio
 never asks for a proxy password in a Terminal prompt or reads one from the
 environment.
 
+New-desktop setup first checks this Studio worker's macOS Accessibility and
+System Events access. Grant those permissions to **Camoufox Studio**. A missing
+permission stops before profile creation or recorder changes. Mission Control
+failure, timeout, desktop limit, uncertain selection, and recovery each have a
+fixed error message; raw OS output is not stored in run history.
+
 The script then:
 
 1. Validates account input before any manager changes.
@@ -138,6 +144,22 @@ the retained desktop and use **Use current desktop**. If a run stops during
 private login, recording stays off. Do not restart recording while private
 login screens remain visible. A completed login with failed recorder restoration
 is recovered by checking the signed-in page, without submitting credentials again.
+
+For an installed-app desktop permission check, use
+`scripts/installed_studio_script_acceptance.py --check-only --output NEW_FILE`
+with the fork's Python and a running Studio. Its legacy Gecko comparison also
+requires explicit `--allow-marionette --proxy-id SAVED_ID`. That comparison
+does not validate the requested external native controller. It clones revision 2
+into a temporary definition, uses
+public test credentials against a local fixture, and exercises the actual worker,
+new desktop, browser, homepage entry, password, and authenticator steps. It
+requires verified Space placement and preserves existing profiles and original
+run history. Its successful test profile moves to Trash; a failed test profile
+is kept for diagnosis. It does not sign into X.
+
+The existing revision-2 login backend uses Marionette. External native input is
+an open requirement; it has no verified background acceptance result yet. Do not
+treat the older Gecko playback proofs as evidence for external native control.
 
 ## Dependencies and adding other scripts
 

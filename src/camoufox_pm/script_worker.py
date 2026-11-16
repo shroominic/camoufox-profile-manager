@@ -25,6 +25,8 @@ ERROR_CODES = {
     "login_target_changed", "login_field_focus", "login_field_type", "login_page_timeout",
     "login_manual_action", "login_state_unavailable",
     "missing_proxy_source", "ambiguous_proxy_source", "proxy_source_invalid",
+    "desktop_permission_required", "desktop_controls_unavailable", "desktop_timeout",
+    "desktop_limit", "desktop_selection_uncertain", "desktop_recovery_required",
 }
 
 

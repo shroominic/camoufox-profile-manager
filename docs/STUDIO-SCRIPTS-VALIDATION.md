@@ -106,3 +106,40 @@ native Scripts page displayed revision 2, the automatically selected saved
 2Captcha source, an empty secure account field, and an available Run script
 button. Both old revision-1 failures remain visible in history. The corrected
 form was left open. No real account login was retried or reported as successful.
+
+## Desktop worker identity and external-control requirement, 16 November 2026
+
+Two subsequent revision-2 attempts stopped at `desktop_requested`. They refer
+to the same created profile; Resume did not create another profile or launch a
+browser. A read-only diagnostic through the installed worker confirmed that
+System Events was reachable but desktop Accessibility was disabled. The same
+Native Control binary reported access when launched by Codex and no access when
+launched by Studio. The previous shell launcher attributed its work to Python.
+
+Desktop access now has a read-only preflight before profile creation, recorder
+changes, and recovery-receipt changes. Fixed errors distinguish permission,
+controls, timeout, desktop limit, uncertain selection, and recovery. OS stderr
+does not enter run history. The external toolkit passed 285 hybrid tests and 43
+proxy-tool tests. The manager's desktop error/runtime/bundle subset passed 70
+tests; all 36 web tests, TypeScript and targeted lint passed.
+
+The app bundle now has a compiled AppKit/WKWebView host and a private Python
+backend. Isolated tests cover startup, explicit Quit/EOF cleanup, lock ownership,
+startup errors, and abort while still holding the shared-state guard if cleanup
+fails. Its isolated native window was observed with an empty test store. The
+installed shared-state host showed its native Starting window and its API opened
+the original store. A subsequent screen lock prevented the remaining visible
+interface and app-permission checks. No general Python permission was enabled.
+
+The user requires external native background input. Earlier successful
+cross-Space playback proofs used Gecko/Marionette and do not establish that
+requirement. The legacy Signup definition was therefore disabled as revision 3;
+its source and all four historical failures remain unchanged. The created user
+profile remains saved. The legacy acceptance harness requires explicit
+`--allow-marionette`; it is not an external-controller test.
+
+An isolated native event probe and page-owned event fixture have been compiled
+and prepared. They compare corrected PID-targeted events with separate native
+Accessibility actions, measure cursor/app/Space isolation, and stop on screen
+lock. A stopped test-only profile was created. No native browser-input delivery
+or real account login has yet been reported as passing this new acceptance gate.

@@ -13,10 +13,14 @@ LOGIN_CODES = (
     "login_target_changed", "login_field_focus", "login_field_type", "login_page_timeout",
     "login_manual_action", "login_state_unavailable",
 )
+DESKTOP_CODES = (
+    "desktop_permission_required", "desktop_controls_unavailable", "desktop_timeout",
+    "desktop_limit", "desktop_selection_uncertain", "desktop_recovery_required",
+)
 PRIVATE = "PRIVATE-EXCEPTION-CONTENT-DO-NOT-STORE"
 
 
-@pytest.mark.parametrize("code", LOGIN_CODES)
+@pytest.mark.parametrize("code", LOGIN_CODES + DESKTOP_CODES)
 def test_known_dependency_reason_is_allowed(code):
     error = RuntimeError(PRIVATE)
     error.code = code
@@ -45,6 +49,7 @@ def test_failing_exception_property_does_not_cross_error_boundary():
         ("dependency", "context.inputs['account']", "script_error"),
         ("dependency", "[context.inputs['account']]", "script_error"),
         ("controlled", "context.inputs['account']", "script_error"),
+        *[("dependency", repr(code), code) for code in DESKTOP_CODES],
     ],
 )
 async def test_real_worker_persists_only_fixed_reason(tmp_path, kind, reason, expected):
