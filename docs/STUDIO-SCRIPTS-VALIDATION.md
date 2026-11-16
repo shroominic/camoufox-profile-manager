@@ -101,6 +101,8 @@ Studio was closed normally with no active browsers or runs, then reopened
 against the shared store. Its API serves revision 2 with the new proxy selector
 and the sole saved source. The database definition matches the reviewed bundle.
 The three active profile records and two revision-1 failed runs remain unchanged.
-The previous failed profile remains in Trash. The Mac was locked during the
-native display check, so the visible form has not yet been inspected after this
-restart. No real account login was retried or reported as successful.
+The previous failed profile remains in Trash. After the Mac was unlocked, the
+native Scripts page displayed revision 2, the automatically selected saved
+2Captcha source, an empty secure account field, and an available Run script
+button. Both old revision-1 failures remain visible in history. The corrected
+form was left open. No real account login was retried or reported as successful.
