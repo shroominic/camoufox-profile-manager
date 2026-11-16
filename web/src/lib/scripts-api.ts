@@ -1,6 +1,7 @@
 import { apiRequest } from './api'
 
-export type ScriptInputType = 'text' | 'secret' | 'integer' | 'boolean' | 'select' | 'profile'
+export type ScriptInputType = 'text' | 'secret' | 'integer' | 'boolean' | 'select' | 'profile' | 'proxy'
+export interface ScriptProxyChoice { id: string; name: string; server: string }
 export interface ScriptInput {
   name: string
   label: string
@@ -47,10 +48,16 @@ export interface ScriptRun {
 export type ScriptInputValues = Record<string, string | number | boolean>
 
 /** Secret defaults are never filled, even if an imported definition supplies one. */
-export function initialScriptInputs(inputs: ScriptInput[]): ScriptInputValues {
-  return Object.fromEntries(inputs.map(input => [input.name,
-    input.type === 'secret' ? '' : input.type === 'boolean' ? input.default === true : input.default ?? '',
-  ]))
+export function initialScriptInputs(
+  inputs: ScriptInput[], proxies: readonly Pick<ScriptProxyChoice, 'id'>[] = [], previousValues: ScriptInputValues = {},
+): ScriptInputValues {
+  return Object.fromEntries(inputs.map(input => {
+    const previousProxy = previousValues[input.name]
+    const value = input.type === 'secret' ? '' : input.type === 'boolean' ? input.default === true
+      : input.type === 'proxy' && typeof previousProxy === 'string' && (previousProxy === '' || proxies.some(proxy => proxy.id === previousProxy))
+        ? previousProxy : input.default ?? (input.type === 'proxy' && proxies.length === 1 ? proxies[0].id : '')
+    return [input.name, value]
+  }))
 }
 
 /** Convert the form without reflecting any supplied value in an error. */
@@ -74,6 +81,7 @@ export function serializeScriptInputs(inputs: ScriptInput[], values: ScriptInput
     } else {
       if (typeof value !== 'string') throw new Error('Invalid script input')
       if (input.type === 'select' && !input.choices?.some(choice => choice.value === value)) throw new Error('Invalid script input')
+      if (input.type === 'proxy' && !/^[a-zA-Z0-9]{8}$/.test(value)) throw new Error('Invalid script input')
       result[input.name] = value
     }
   }

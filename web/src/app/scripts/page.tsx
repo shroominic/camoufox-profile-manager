@@ -1,15 +1,16 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
+import Link from 'next/link'
 import { Code2, Download, Pencil, Play, Plus, RefreshCw, Square, Upload, X } from 'lucide-react'
 
 import { useI18n } from '@/components/i18n-provider'
 import { Modal } from '@/components/modal'
-import { profilesAPI } from '@/lib/api'
+import { profilesAPI, proxiesAPI } from '@/lib/api'
 import {
   definitionForExport, initialScriptInputs, scriptsAPI, serializeScriptInputs,
   type SavedScript, type ScriptDefinition, type ScriptInput, type ScriptInputValues,
-  type ScriptRun, type ScriptRunStatus, type ScriptSummary,
+  type ScriptProxyChoice, type ScriptRun, type ScriptRunStatus, type ScriptSummary,
 } from '@/lib/scripts-api'
 
 const ACTIVE = new Set<ScriptRunStatus>(['queued', 'running', 'stopping'])
@@ -34,6 +35,9 @@ const ERROR_LABELS: Record<string, string> = {
   login_page_timeout: 'The next login page did not finish loading. The saved profile is kept.',
   login_manual_action: 'Login requires manual action. Check the browser for a challenge, account notice, or verification choice.',
   login_state_unavailable: 'The login page state could not be read. The saved profile is kept.',
+  missing_proxy_source: 'No saved proxy account is available. Add one in Proxy library and select it before creating a profile.',
+  ambiguous_proxy_source: 'More than one saved proxy account is available. Select one before creating a profile.',
+  proxy_source_invalid: 'The selected proxy account is unavailable or incomplete. Check it in Proxy library before trying again.',
 }
 const EMPTY_DEFINITION: ScriptDefinition = {
   name: '', description: '', language: 'python', code: 'context.stage("started")\n', inputs: [],
@@ -57,6 +61,7 @@ export default function ScriptsPage() {
   const [selected, setSelected] = useState<SavedScript | null>(null)
   const [runs, setRuns] = useState<ScriptRun[]>([])
   const [profiles, setProfiles] = useState<ProfileChoice[]>([])
+  const [proxies, setProxies] = useState<ScriptProxyChoice[]>([])
   const [values, setValues] = useState<ScriptInputValues>({})
   const [resumeOf, setResumeOf] = useState<string | undefined>()
   const [editor, setEditor] = useState<Editor | null>(null)
@@ -69,11 +74,31 @@ export default function ScriptsPage() {
   const fileInput = useRef<HTMLInputElement>(null)
   const selectionRequest = useRef(0)
   const mounted = useRef(true)
+  const proxyChoices = useRef<ScriptProxyChoice[]>([])
+  const proxySelections = useRef<Record<string, ScriptInputValues>>({})
 
   const refreshList = useCallback(async () => {
     const result = await scriptsAPI.list()
     if (mounted.current) setScripts(result.scripts)
     return result.scripts
+  }, [])
+
+  const refreshChoices = useCallback(async () => {
+    const profileRequest = (async () => {
+      const choices: ProfileChoice[] = []
+      for (let page = 1; page <= 100; page++) {
+        const response = await profilesAPI.getProfiles({ page, per_page: 100 })
+        choices.push(...response.profiles.map(profile => ({ id: profile.id, name: profile.name })))
+        if (!response.has_next) break
+      }
+      return choices
+    })()
+    const proxyRequest = proxiesAPI.list().then(records => records.map(({ id, name, server }) => ({ id, name, server })))
+    const [profileList, proxyList] = await Promise.all([profileRequest, proxyRequest])
+    if (!mounted.current) return
+    proxyChoices.current = proxyList
+    setProfiles(profileList)
+    setProxies(proxyList)
   }, [])
 
   const selectScript = useCallback(async (id: string) => {
@@ -86,8 +111,10 @@ export default function ScriptsPage() {
     try {
       const [script, history] = await Promise.all([scriptsAPI.get(id), scriptsAPI.runs(id)])
       if (!mounted.current || request !== selectionRequest.current) return
+      const initialValues = initialScriptInputs(script.inputs, proxyChoices.current, proxySelections.current[id])
+      proxySelections.current[id] = Object.fromEntries(script.inputs.filter(input => input.type === 'proxy').map(input => [input.name, initialValues[input.name]]))
       setSelected(script)
-      setValues(initialScriptInputs(script.inputs))
+      setValues(initialValues)
       setRuns(history.runs)
     } catch {
       if (mounted.current && request === selectionRequest.current) setError('The script could not load. Refresh and try again.')
@@ -98,7 +125,7 @@ export default function ScriptsPage() {
     setLoading(true)
     setError(null)
     try {
-      const list = await refreshList()
+      const [list] = await Promise.all([refreshList(), refreshChoices()])
       if (!mounted.current) return
       const target = selected?.id ?? list[0]?.id
       if (target) await selectScript(target)
@@ -107,24 +134,16 @@ export default function ScriptsPage() {
     } finally {
       if (mounted.current) setLoading(false)
     }
-  }, [refreshList, selectScript, selected])
+  }, [refreshList, refreshChoices, selectScript, selected])
 
   useEffect(() => {
     mounted.current = true
     let cancelled = false
     void (async () => {
       try {
-        const list = await refreshList()
+        const [list] = await Promise.all([refreshList(), refreshChoices()])
         if (cancelled) return
         if (list[0]) await selectScript(list[0].id)
-        const choices: ProfileChoice[] = []
-        for (let page = 1; page <= 100; page++) {
-          const response = await profilesAPI.getProfiles({ page, per_page: 100 })
-          if (cancelled) return
-          choices.push(...response.profiles.map(profile => ({ id: profile.id, name: profile.name })))
-          if (!response.has_next) break
-        }
-        if (mounted.current) setProfiles(choices)
       } catch {
         if (mounted.current) setError('The script library could not load. Check the app connection.')
       } finally {
@@ -135,7 +154,7 @@ export default function ScriptsPage() {
       cancelled = true
       mounted.current = false
     }
-  }, [refreshList, selectScript])
+  }, [refreshList, refreshChoices, selectScript])
 
   const hasActiveRun = runs.some(run => ACTIVE.has(run.status))
   useEffect(() => {
@@ -157,6 +176,7 @@ export default function ScriptsPage() {
   }, [selected, hasActiveRun])
 
   function setInput(input: ScriptInput, value: string | boolean) {
+    if (input.type === 'proxy' && selected) proxySelections.current[selected.id] = { ...proxySelections.current[selected.id], [input.name]: value }
     setValues(previous => ({ ...previous, [input.name]: value }))
   }
 
@@ -168,8 +188,8 @@ export default function ScriptsPage() {
     catch { setError('Check the required script inputs. No run was started.'); return }
     const scriptId = selected.id
     const resume = resumeOf
-    // Clear every input before the request completes; never keep account values in history.
-    setValues(initialScriptInputs(selected.inputs))
+    // Clear account inputs before the request completes; keep only saved proxy references.
+    setValues(initialScriptInputs(selected.inputs, proxyChoices.current, proxySelections.current[selected.id]))
     setResumeOf(undefined)
     setBusy(true)
     setError(null)
@@ -198,7 +218,7 @@ export default function ScriptsPage() {
 
   function prepareResume(run: ScriptRun) {
     if (!selected || run.revision !== selected.revision) return
-    setValues(initialScriptInputs(selected.inputs))
+    setValues(initialScriptInputs(selected.inputs, proxyChoices.current, proxySelections.current[selected.id]))
     setResumeOf(run.id)
     setError(null)
   }
@@ -304,15 +324,18 @@ export default function ScriptsPage() {
                   <span className="mb-1 block text-[12px] text-ink">{input.label}{input.required ? ' *' : ''}</span>
                   {input.type === 'boolean'
                     ? <input type="checkbox" checked={values[input.name] === true} onChange={event => setInput(input, event.target.checked)} disabled={busy || hasActiveRun} aria-label={input.label} />
-                    : input.type === 'select' || input.type === 'profile'
+                    : input.type === 'select' || input.type === 'profile' || input.type === 'proxy'
                       ? <select className="field" required={input.required} value={String(values[input.name] ?? '')} onChange={event => setInput(input, event.target.value)} disabled={busy || hasActiveRun} aria-label={input.label}>
                         <option value="">{input.required ? t('Choose an option') : t('Automatic / not set')}</option>
-                        {(input.type === 'profile' ? profiles.map(profile => ({ value: profile.id, label: `${profile.name} (${profile.id})` })) : input.choices ?? []).map(choice => <option key={choice.value} value={choice.value}>{choice.label}</option>)}
+                        {(input.type === 'profile' ? profiles.map(profile => ({ value: profile.id, label: `${profile.name} (${profile.id})` }))
+                          : input.type === 'proxy' ? proxies.map(proxy => ({ value: proxy.id, label: `${proxy.name} (${proxy.server})` }))
+                            : input.choices ?? []).map(choice => <option key={choice.value} value={choice.value}>{choice.label}</option>)}
                       </select>
                       : <input className="field" type={input.type === 'secret' ? 'password' : input.type === 'integer' ? 'number' : 'text'} step={input.type === 'integer' ? 1 : undefined}
                         value={String(values[input.name] ?? '')} onChange={event => setInput(input, event.target.value)} required={input.required} disabled={busy || hasActiveRun}
                         autoComplete="off" autoCorrect="off" autoCapitalize="none" spellCheck={false} aria-label={input.label} data-1p-ignore data-lpignore="true" />}
                   {input.help && <span className="mt-1 block text-[11px] text-ink-faint">{input.help}</span>}
+                  {input.type === 'proxy' && proxies.length === 0 && <Link href="/proxies/" className="mt-1 block text-[11px] text-signal underline">{t('Add a proxy in Proxy library before creating a profile.')}</Link>}
                 </label>)}
                 <button type="submit" className="btn btn-primary" disabled={!selected.enabled || busy || hasActiveRun}><Play size={13} aria-hidden="true" />{busy ? t('Submitting…') : resumeOf ? t('Resume run') : t('Run script')}</button>
                 {!selected.enabled && <p className="text-[12px] text-ink-dim">{t('This script is disabled. Enable it in the editor to run it.')}</p>}
@@ -348,7 +371,7 @@ export default function ScriptsPage() {
             <label className="block text-[12px]">{t('Inputs JSON')}<textarea className="field mt-1 font-mono text-[11px]" rows={8} value={editor.inputsJSON} onChange={event => setEditor({ ...editor, inputsJSON: event.target.value })} spellCheck={false} /></label>
             <label className="block text-[12px]">{t('Stages JSON')}<textarea className="field mt-1 font-mono text-[11px]" rows={8} value={editor.stagesJSON} onChange={event => setEditor({ ...editor, stagesJSON: event.target.value })} spellCheck={false} /></label>
           </div>
-          <p className="text-[11px] text-ink-faint">{t('Input fields use name, label, type, required, help, default, and choices. Secret fields cannot have defaults. Stages use id and label.')}</p>
+          <p className="text-[11px] text-ink-faint">{t('Input fields use name, label, type, required, help, default, and choices. Types include text, secret, integer, boolean, select, profile, and proxy. Proxy fields select saved Proxy library accounts. Secret fields cannot have defaults. Stages use id and label.')}</p>
           <div className="flex flex-wrap items-end gap-4">
             <label className="text-[12px]">{t('Time limit in seconds')}<input className="field mt-1 w-40" type="number" min={5} max={7200} required value={editor.definition.max_runtime_seconds} onChange={event => editDefinition('max_runtime_seconds', Number(event.target.value))} /></label>
             <label className="flex items-center gap-2 pb-2 text-[12px]"><input type="checkbox" checked={editor.definition.enabled} onChange={event => editDefinition('enabled', event.target.checked)} />{t('Enabled')}</label>

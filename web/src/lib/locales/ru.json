@@ -1444,7 +1444,7 @@
   "Export script definition": "Экспорт описания скрипта",
   "Import JSON": "Импорт JSON",
   "Import script definition": "Импорт описания скрипта",
-  "Input fields use name, label, type, required, help, default, and choices. Secret fields cannot have defaults. Stages use id and label.": "Поля ввода используют name, label, type, required, help, default и choices. У секретных полей не может быть значений по умолчанию. Этапы используют id и label.",
+  "Input fields use name, label, type, required, help, default, and choices. Types include text, secret, integer, boolean, select, profile, and proxy. Proxy fields select saved Proxy library accounts. Secret fields cannot have defaults. Stages use id and label.": "Поля ввода используют name, label, type, required, help, default и choices. Доступны типы text, secret, integer, boolean, select, profile и proxy. Поля proxy позволяют выбрать сохранённую учётную запись из библиотеки прокси. У секретных полей не может быть значений по умолчанию. Этапы используют id и label.",
   "Inputs JSON": "Параметры ввода JSON",
   "Inputs and stages must be valid JSON arrays.": "Параметры ввода и этапы должны быть корректными JSON-массивами.",
   "Interrupted": "Прерван",
@@ -1501,5 +1501,9 @@
   "The login field type did not match the expected input. No further credentials were sent.": "Тип поля входа не соответствует ожидаемым данным. Дальнейшая отправка учётных данных остановлена.",
   "The next login page did not finish loading. The saved profile is kept.": "Следующая страница входа не завершила загрузку. Сохранённый профиль оставлен.",
   "Login requires manual action. Check the browser for a challenge, account notice, or verification choice.": "Для входа требуется действие пользователя. Проверьте запрос проверки, уведомление об учётной записи или выбор способа подтверждения в браузере.",
-  "The login page state could not be read. The saved profile is kept.": "Не удалось прочитать состояние страницы входа. Сохранённый профиль оставлен."
+  "The login page state could not be read. The saved profile is kept.": "Не удалось прочитать состояние страницы входа. Сохранённый профиль оставлен.",
+  "No saved proxy account is available. Add one in Proxy library and select it before creating a profile.": "Нет сохранённой учётной записи прокси. Добавьте её в библиотеку прокси и выберите перед созданием профиля.",
+  "More than one saved proxy account is available. Select one before creating a profile.": "Доступно несколько сохранённых учётных записей прокси. Выберите одну перед созданием профиля.",
+  "The selected proxy account is unavailable or incomplete. Check it in Proxy library before trying again.": "Выбранная учётная запись прокси недоступна или заполнена не полностью. Перед повторной попыткой проверьте её в библиотеке прокси.",
+  "Add a proxy in Proxy library before creating a profile.": "Добавьте прокси в библиотеку прокси перед созданием профиля."
 }

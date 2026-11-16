@@ -130,6 +130,13 @@ class ProxyInventory:
         ).fetchall()
         return [_public(row) for row in rows]
 
+    async def configuration(self, proxy_id: str) -> dict:
+        """Resolve one explicitly selected proxy for an internal operation only."""
+        config = self._secret_config(proxy_id)
+        config.server = normalize_proxy_server(config.server)
+        config.validate_authentication()
+        return config.model_dump(mode="json")
+
     async def create(self, values: dict) -> dict:
         proxy_id = generate_short_id()
         now = datetime.now(timezone.utc).isoformat()

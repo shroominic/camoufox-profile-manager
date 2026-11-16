@@ -13,6 +13,39 @@ test('run form never fills a secret default and keeps nonsecret typed defaults',
   assert.deepEqual(initialScriptInputs(fields), { account: '', count: 2, mode: '', visible: false })
 })
 
+test('proxy inputs select a sole saved account, respect defaults, and leave multiple accounts unselected', () => {
+  const input: ScriptInput = { name: 'connection', label: 'Connection', type: 'proxy', required: false }
+  const first = { id: 'abcd1234' }
+  const second = { id: 'efgh5678' }
+  assert.deepEqual(initialScriptInputs([input]), { connection: '' })
+  assert.deepEqual(initialScriptInputs([input], [first]), { connection: first.id })
+  assert.deepEqual(initialScriptInputs([input], [first, second]), { connection: '' })
+  assert.deepEqual(initialScriptInputs([{ ...input, default: second.id }], [first, second]), { connection: second.id })
+  assert.deepEqual(initialScriptInputs([{ ...input, default: '' }], [first]), { connection: '' })
+  assert.deepEqual(initialScriptInputs([{ ...input, default: null }], [first]), { connection: first.id })
+})
+
+test('form resets preserve saved proxy choices while clearing account input', () => {
+  const inputs: ScriptInput[] = [...fields, { name: 'connection', label: 'Connection', type: 'proxy', required: false }]
+  const proxies = [{ id: 'abcd1234' }, { id: 'efgh5678' }]
+  const previous = { account: 'must-clear', connection: proxies[1].id, count: 55, mode: 'slow', visible: true }
+  assert.deepEqual(initialScriptInputs(inputs, proxies, previous), {
+    account: '', count: 2, mode: '', visible: false, connection: proxies[1].id,
+  })
+  assert.equal(initialScriptInputs(inputs, proxies, { connection: '' }).connection, '')
+  assert.equal(initialScriptInputs(inputs, [proxies[0]], previous).connection, proxies[0].id)
+})
+
+test('proxy serialization only sends a saved account reference and validates required and optional inputs', () => {
+  const input: ScriptInput = { name: 'connection', label: 'Connection', type: 'proxy', required: false }
+  assert.deepEqual(serializeScriptInputs([input], { connection: 'abcd1234' }), { connection: 'abcd1234' })
+  assert.deepEqual(serializeScriptInputs([input], { connection: '' }), {})
+  for (const value of ['proxy.example:8080:user:private', 'abcd1234-extra', 'short', 12345678]) {
+    assert.throws(() => serializeScriptInputs([input], { connection: value }), { message: 'Invalid script input' })
+  }
+  assert.throws(() => serializeScriptInputs([{ ...input, required: true }], { connection: '' }), { message: 'Invalid script input' })
+})
+
 test('run serialization preserves literal secrets and rejects invalid typed fields without echoing them', () => {
   const privateValue = 'exact:private$value'
   assert.deepEqual(serializeScriptInputs(fields, { account: privateValue, count: '3', mode: 'slow', visible: false }), {

@@ -8,9 +8,17 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
+from camoufox_pm.core.models import ProxyConfig
+from camoufox_pm.core.proxy_import import normalize_proxy_server
 from camoufox_pm.core.script_models import validate_run_inputs
 from camoufox_pm.core.script_store import ScriptConflict, ScriptNotFound, public_run
-from camoufox_pm.script_worker import ERROR_CODES, safe_result, secret_tokens
+from camoufox_pm.script_worker import (
+    ERROR_CODES,
+    ScriptFailure,
+    proxy_secret_tokens,
+    safe_result,
+    secret_tokens,
+)
 
 ACTIVE = {"queued", "running", "stopping"}
 TERMINAL = {"succeeded", "failed", "cancelled", "interrupted"}
@@ -21,11 +29,12 @@ def now():
 
 
 class ScriptService:
-    def __init__(self, store, manager_url, *, import_paths=(), interpreter=None):
+    def __init__(self, store, manager_url, *, import_paths=(), interpreter=None, proxy_resolver=None):
         self.store = store
         self.manager_url = manager_url
         self.import_paths = [str(Path(path).expanduser().resolve()) for path in import_paths]
         self.interpreter = interpreter or sys.executable
+        self._proxy_resolver = proxy_resolver
         self.root = store.path.parent / "studio-control" / "script-runs"
         self.root.mkdir(parents=True, exist_ok=True, mode=0o700)
         self._tasks = {}
@@ -146,6 +155,40 @@ class ScriptService:
         env["PYTHONUNBUFFERED"] = "1"
         return env
 
+    async def _resolve_proxies(self, run_id, packet):
+        """Keep only declared, selected library configurations in private memory."""
+        selected = dict.fromkeys(
+            packet["inputs"][field["name"]]
+            for field in packet["script"].get("inputs", [])
+            if field["type"] == "proxy" and packet["inputs"].get(field["name"])
+        )
+        if not selected:
+            return
+        packet["proxy_configs"] = {}
+        packet["proxy_errors"] = {}
+        for proxy_id in selected:
+            if run_id in self._stops:
+                return
+            if self._proxy_resolver is None:
+                packet["proxy_errors"][proxy_id] = "missing_proxy_source"
+                continue
+            try:
+                raw = await self._proxy_resolver(proxy_id)
+                if run_id in self._stops:
+                    return
+                if not isinstance(raw, dict) or set(raw) - set(ProxyConfig.model_fields):
+                    raise ValueError("Invalid proxy configuration")
+                config = ProxyConfig.model_validate(raw)
+                config.server = normalize_proxy_server(config.server)
+                config.validate_authentication()
+                packet["proxy_configs"][proxy_id] = config.model_dump(mode="json")
+                del raw, config
+            except Exception:
+                # Decryption and validation errors can contain private values.
+                # A script can ignore optional proxy fields. Defer only this
+                # fixed failure until it asks for that selected configuration.
+                packet["proxy_errors"][proxy_id] = "proxy_source_invalid"
+
     async def _execute(self, run_id, packet, descriptor):
         process = None
         terminal = None
@@ -154,10 +197,19 @@ class ScriptService:
         interrupted = False
         definition = packet["script"]
         private_tokens = secret_tokens(definition, packet["inputs"], packet.get("manager_headers"))
+        strict_proxy_tokens = set()
         try:
             if run_id in self._stops:
                 terminal, error_code = "cancelled", "stopped"
                 return
+            await self._resolve_proxies(run_id, packet)
+            if run_id in self._stops:
+                terminal, error_code = "cancelled", "stopped"
+                return
+            private_tokens.update(secret_tokens(
+                definition, {}, proxy_configs=packet.get("proxy_configs")
+            ))
+            strict_proxy_tokens.update(proxy_secret_tokens(packet.get("proxy_configs")))
             process = await asyncio.create_subprocess_exec(
                 self.interpreter, "-m", "camoufox_pm.script_worker",
                 stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE,
@@ -222,7 +274,7 @@ class ScriptService:
                         self.store.append_event(run_id, "stage", stage=value["stage"])
                         last_stage = value["stage"]
                 elif value.get("kind") == "complete" and set(value) == {"kind", "result"}:
-                    result = safe_result(value["result"], private_tokens)
+                    result = safe_result(value["result"], private_tokens, strict_proxy_tokens)
                     message = "complete"
                 elif value.get("kind") == "error" and set(value) == {"kind", "error_code"}:
                     error_code = value["error_code"] if value["error_code"] in ERROR_CODES else "script_error"
@@ -244,6 +296,10 @@ class ScriptService:
                     error_code = error_code or "worker_protocol_error"
         except asyncio.CancelledError:
             terminal, error_code = "interrupted", "interrupted"
+        except ScriptFailure as error:
+            terminal, error_code = (
+                ("cancelled", "stopped") if run_id in self._stops else ("failed", error.code)
+            )
         except OSError:
             terminal, error_code = "failed", "worker_unavailable"
         except Exception:
@@ -254,6 +310,7 @@ class ScriptService:
                     await self._kill(process, already_interrupted=interrupted)
                 packet.clear()
                 private_tokens.clear()
+                strict_proxy_tokens.clear()
                 terminal = terminal or "failed"
                 self.store.update_run(run_id, status=terminal, error_code=error_code, result=result if terminal == "succeeded" else {}, finished_at=now())
                 self.store.append_event(run_id, terminal)

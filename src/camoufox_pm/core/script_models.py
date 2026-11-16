@@ -37,7 +37,7 @@ class ScriptChoice(ScriptModel):
 class ScriptInput(ScriptModel):
     name: str = Field(min_length=1, max_length=64)
     label: str = Field(min_length=1, max_length=160)
-    type: Literal["text", "secret", "integer", "boolean", "select", "profile"]
+    type: Literal["text", "secret", "integer", "boolean", "select", "profile", "proxy"]
     required: bool = False
     help: str = Field(default="", max_length=1000)
     default: str | int | bool | None = None
@@ -133,6 +133,8 @@ def _validate_value(field: ScriptInput, value):
             raise ValueError("Use a bounded text script input")
         if field.type == "profile" and not re.fullmatch(r"[A-Za-z0-9]{8}", value):
             raise ValueError("Select a valid profile")
+        if field.type == "proxy" and not re.fullmatch(r"[A-Za-z0-9]{8}", value):
+            raise ValueError("Select a valid saved proxy")
         if field.type == "select" and value not in {choice.value for choice in field.choices}:
             raise ValueError("Select one of the available script choices")
     return value
@@ -150,7 +152,7 @@ def validate_run_inputs(definition: ScriptDefinition | dict, inputs: dict) -> di
     result = {}
     for name, field in fields.items():
         value = inputs.get(name, field.default)
-        if value is None or (value == "" and field.type in {"secret", "profile", "integer", "select"}):
+        if value is None or (value == "" and field.type in {"secret", "profile", "proxy", "integer", "select"}):
             if field.required:
                 raise ValueError("Supply all required script inputs")
             result[name] = None

@@ -5,9 +5,12 @@ from types import SimpleNamespace
 
 import httpx
 import pytest
+from cryptography.fernet import Fernet
 from fastapi import FastAPI
 
 from camoufox_pm.api.routes import scripts
+from camoufox_pm.config import get_settings
+from camoufox_pm.core.proxy_inventory import ProxyInventory
 from camoufox_pm.core.script_runtime import ScriptService
 from camoufox_pm.core.script_store import ScriptStore
 
@@ -84,3 +87,62 @@ async def test_invalid_private_request_is_not_reflected(script_client):
     assert response.status_code == 422
     assert private not in response.text
     assert script_client.service.store.list_runs() == []
+
+
+async def test_saved_proxy_runs_without_any_profile_and_deleted_proxy_fails_safely(
+    script_client, profile_manager, monkeypatch,
+):
+    monkeypatch.setenv("CPM_SECRET_KEY", Fernet.generate_key().decode())
+    get_settings.cache_clear()
+    username, password = "PRIVATE-LIBRARY-USER", "PRIVATE-LIBRARY-PASSWORD"
+    try:
+        inventory = ProxyInventory(profile_manager)
+        selected = await inventory.create({
+            "name": "Saved source", "type": "http", "server": "proxy.example:8080",
+            "username": username, "password": password,
+        })
+        script_client.service._proxy_resolver = inventory.configuration
+        created = await script_client.client.post("/api/v1/studio/scripts", json={
+            "name": "Library source check",
+            "code": "config=context.proxy_config(context.inputs['proxy'])\n"
+            "context.set_result({'resolved':bool(config['password']),'echo':config['username']})",
+            "inputs": [{
+                "name": "proxy", "label": "Saved proxy", "type": "proxy",
+                "default": selected["id"],
+            }],
+        })
+        assert created.status_code == 201
+        identifier = created.json()["id"]
+        response = await script_client.client.post(
+            f"/api/v1/studio/scripts/{identifier}/runs", json={"inputs": {}},
+        )
+        assert response.status_code == 202
+        result = await wait_run(script_client.client, response.json()["id"])
+        assert result["status"] == "succeeded" and result["result"] == {"resolved": True}
+        await inventory.delete(selected["id"], 0)
+        response = await script_client.client.post(
+            f"/api/v1/studio/scripts/{identifier}/runs", json={"inputs": {}},
+        )
+        result = await wait_run(script_client.client, response.json()["id"])
+        assert result["status"] == "failed" and result["error_code"] == "proxy_source_invalid"
+        assert username not in str(result) and password not in str(result)
+        unused = await script_client.client.post("/api/v1/studio/scripts", json={
+            "name": "Unused optional source check",
+            "code": "context.set_result({'ran':True})",
+            "inputs": [{
+                "name": "proxy", "label": "Optional saved proxy", "type": "proxy",
+                "default": selected["id"],
+            }],
+        })
+        assert unused.status_code == 201
+        response = await script_client.client.post(
+            f"/api/v1/studio/scripts/{unused.json()['id']}/runs", json={"inputs": {}},
+        )
+        result = await wait_run(script_client.client, response.json()["id"])
+        assert result["status"] == "succeeded" and result["result"] == {"ran": True}
+        for path in [script_client.service.store.path, *script_client.service.root.rglob("*")]:
+            if path.is_file():
+                assert username.encode() not in path.read_bytes()
+                assert password.encode() not in path.read_bytes()
+    finally:
+        get_settings.cache_clear()

@@ -46,6 +46,7 @@ from camoufox_pm.core.backups import ProfileBackupManager
 from camoufox_pm.core.database import StorageManager
 from camoufox_pm.core.maintenance import MaintenanceBlocked, MaintenanceGate
 from camoufox_pm.core.profile_manager import ProfileManager
+from camoufox_pm.core.proxy_inventory import ProxyInventory
 from camoufox_pm.core.scheduler import TaskScheduler
 from camoufox_pm.core.script_runtime import ScriptService
 from camoufox_pm.core.script_store import ScriptStore
@@ -86,9 +87,14 @@ async def lifespan(app: FastAPI):
                 else Path(settings.db_path).expanduser().resolve().parent / "studio-control.sqlite3"
             )
             ui_host = "127.0.0.1" if settings.host in ("0.0.0.0", "127.0.0.1") else settings.host
+
+            async def resolve_script_proxy(proxy_id):
+                return await ProxyInventory(profile_manager).configuration(proxy_id)
+
             script_service = ScriptService(
                 ScriptStore(script_path), f"http://{ui_host}:{settings.port}",
                 import_paths=settings.script_import_paths,
+                proxy_resolver=resolve_script_proxy,
             )
             app.state.studio_scripts = script_service
             sync.set_sync_directory(

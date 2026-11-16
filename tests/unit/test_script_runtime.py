@@ -3,7 +3,7 @@
 import asyncio
 import os
 from pathlib import Path
-from unittest.mock import Mock
+from unittest.mock import AsyncMock, Mock, call
 
 import pytest
 
@@ -12,6 +12,11 @@ from camoufox_pm.core.script_runtime import ScriptService
 from camoufox_pm.core.script_store import ScriptConflict, ScriptStore
 
 PRIVATE = "demo-user:PRIVATE-PASSWORD-NOT-SAVED:private@example.invalid:IGNORED-PRIVATE:BASE32-PRIVATE"
+PROXY_PRIVATE = {
+    "type": "http", "server": "proxy.example:8080",
+    "username": "PRIVATE-PROXY-USERNAME-NOT-SAVED",
+    "password": "PRIVATE-PROXY-PASSWORD:@/NOT-SAVED", "country": "US",
+}
 
 
 def definition(code, **changes):
@@ -43,6 +48,197 @@ def assert_private_absent(root):
             data = path.read_bytes()
             for value in PRIVATE.split(":"):
                 assert value.encode() not in data
+
+
+def assert_proxy_private_absent(root):
+    from urllib.parse import quote
+
+    for path in root.rglob("*"):
+        if path.is_file():
+            data = path.read_bytes()
+            for name in ("username", "password"):
+                assert PROXY_PRIVATE[name].encode() not in data
+                assert quote(PROXY_PRIVATE[name], safe="").encode() not in data
+
+
+def proxy_definition(code, **changes):
+    return definition(code, inputs=[
+        {"name": "proxy", "label": "Saved proxy", "type": "proxy", "required": True},
+    ], **changes)
+
+
+async def test_only_selected_declared_proxy_refs_resolve_once_and_remain_private(runtime):
+    runtime._proxy_resolver = AsyncMock(return_value=PROXY_PRIVATE)
+    script = runtime.store.save_script(definition(
+        "import sys\nfrom urllib.parse import quote\n"
+        "first = context.proxy_config(context.inputs['proxy'])\n"
+        "first['username'] = 'changed'\n"
+        "config = context.proxy_config(context.inputs['proxy'])\n"
+        "print(config)\nprint(config, file=sys.stderr)\n"
+        "context.set_result({'copied':config['username'] != 'changed',"
+        "'echo':config['username'],'encoded':quote(config['password'],safe='')})",
+        inputs=[
+            {"name": "proxy", "label": "Saved proxy", "type": "proxy"},
+            {"name": "same", "label": "Same proxy", "type": "proxy"},
+            {"name": "blank", "label": "No proxy", "type": "proxy"},
+            {"name": "profile", "label": "Profile", "type": "profile"},
+            {"name": "text", "label": "Text", "type": "text"},
+        ],
+    ))
+    run = await runtime.start(script["id"], {
+        "proxy": "abcd1234", "same": "abcd1234", "blank": "",
+        "profile": "efgh5678", "text": "ijkl9012",
+    })
+    result = await finished(runtime, run["id"])
+    assert result["status"] == "succeeded"
+    assert result["result"] == {"copied": True}
+    assert runtime._proxy_resolver.await_args_list == [call("abcd1234")]
+    assert PROXY_PRIVATE["username"] == "PRIVATE-PROXY-USERNAME-NOT-SAVED"
+    assert_proxy_private_absent(runtime.store.path.parent)
+
+
+async def test_parent_filters_proxy_credentials_from_raw_worker_protocol(runtime):
+    runtime._proxy_resolver = AsyncMock(return_value=PROXY_PRIVATE)
+    script = runtime.store.save_script(proxy_definition(
+        "import json,os\nfrom urllib.parse import quote\n"
+        "config=context.proxy_config(context.inputs['proxy'])\n"
+        "os.write(1,json.dumps({'kind':'complete','result':{'safe':True,"
+        "'echo':config['username'],'encoded':quote(config['password'],safe='')}}).encode()+b'\\n')\n"
+        "os._exit(0)"
+    ))
+    run = await runtime.start(script["id"], {"proxy": "abcd1234"})
+    result = await finished(runtime, run["id"])
+    assert result["status"] == "succeeded"
+    assert result["result"] == {"safe": True}
+    assert_proxy_private_absent(runtime.store.path.parent)
+
+
+@pytest.mark.parametrize("raw_protocol", [False, True])
+async def test_result_keys_and_short_proxy_credential_substrings_are_filtered(runtime, raw_protocol):
+    runtime._proxy_resolver = AsyncMock(return_value={
+        **PROXY_PRIVATE, "username": "Q7", "password": "p9",
+    })
+    ending = (
+        "os.write(1,json.dumps({'kind':'complete','result':result}).encode()+b'\\n')\n"
+        "os._exit(0)"
+        if raw_protocol else "context.set_result(result)"
+    )
+    script = runtime.store.save_script(definition(
+        "import json,os\nconfig=context.proxy_config(context.inputs['proxy'])\n"
+        "result={'safe':True,context.inputs['account']:'hidden',"
+        "'user_'+config['username']:'hidden','pass_'+config['password']:'hidden',"
+        "'echo_user':'prefix'+config['username']+'suffix',"
+        "'echo_pass':'prefix'+config['password']+'suffix'}\n" + ending,
+        inputs=[
+            {"name": "account", "label": "Private", "type": "secret"},
+            {"name": "proxy", "label": "Proxy", "type": "proxy"},
+        ],
+    ))
+    run = await runtime.start(script["id"], {"proxy": "abcd1234", "account": "PRIVATE_RESULT_KEY"})
+    result = await finished(runtime, run["id"])
+    assert result["status"] == "succeeded" and result["result"] == {"safe": True}
+    for path in runtime.store.path.parent.rglob("*"):
+        if path.is_file():
+            assert b"PRIVATE_RESULT_KEY" not in path.read_bytes()
+
+
+@pytest.mark.parametrize("source", ["missing_resolver", "deleted", "invalid_config"])
+async def test_unavailable_proxy_source_records_fixed_error_on_access(runtime, source):
+    if source == "deleted":
+        runtime._proxy_resolver = AsyncMock(side_effect=ValueError(PROXY_PRIVATE["password"]))
+    elif source == "invalid_config":
+        runtime._proxy_resolver = AsyncMock(return_value={**PROXY_PRIVATE, "server": "invalid"})
+    script = runtime.store.save_script(proxy_definition(
+        "context.proxy_config(context.inputs['proxy'])\n"
+        "(context.run_dir/'unexpected-action').write_text('changed')"
+    ))
+    run = await runtime.start(script["id"], {"proxy": "abcd1234"})
+    result = await finished(runtime, run["id"])
+    assert result["status"] == "failed"
+    assert result["error_code"] == (
+        "missing_proxy_source" if source == "missing_resolver" else "proxy_source_invalid"
+    )
+    assert [event["kind"] for event in result["events"]] == ["queued", "started", "failed"]
+    assert not (runtime.root / run["id"] / "unexpected-action").exists()
+    assert not runtime._processes and not runtime._tasks
+    assert_proxy_private_absent(runtime.store.path.parent)
+
+
+@pytest.mark.parametrize("source", ["missing_resolver", "deleted", "invalid_config"])
+async def test_unavailable_optional_proxy_can_be_unused_by_script(runtime, source):
+    if source == "deleted":
+        runtime._proxy_resolver = AsyncMock(side_effect=ValueError(PROXY_PRIVATE["password"]))
+    elif source == "invalid_config":
+        runtime._proxy_resolver = AsyncMock(return_value={**PROXY_PRIVATE, "server": "invalid"})
+    script = runtime.store.save_script(definition("context.set_result({'ran':True})", inputs=[
+        {"name": "proxy", "label": "Optional proxy", "type": "proxy"},
+    ]))
+    run = await runtime.start(script["id"], {"proxy": "abcd1234"})
+    result = await finished(runtime, run["id"])
+    assert result["status"] == "succeeded" and result["result"] == {"ran": True}
+    assert_proxy_private_absent(runtime.store.path.parent)
+
+
+async def test_one_unavailable_proxy_does_not_block_other_selected_proxy(runtime):
+    runtime._proxy_resolver = AsyncMock(side_effect=[ValueError(PROXY_PRIVATE["password"]), PROXY_PRIVATE])
+    script = runtime.store.save_script(definition(
+        "config=context.proxy_config(context.inputs['working'])\n"
+        "context.set_result({'resolved':bool(config['password'])})", inputs=[
+            {"name": "unused", "label": "Unused proxy", "type": "proxy"},
+            {"name": "working", "label": "Working proxy", "type": "proxy"},
+        ],
+    ))
+    run = await runtime.start(script["id"], {"unused": "abcd1234", "working": "efgh5678"})
+    result = await finished(runtime, run["id"])
+    assert result["status"] == "succeeded" and result["result"] == {"resolved": True}
+    assert runtime._proxy_resolver.await_args_list == [call("abcd1234"), call("efgh5678")]
+    assert_proxy_private_absent(runtime.store.path.parent)
+
+
+async def test_optional_blank_proxy_needs_no_resolver(runtime):
+    script = runtime.store.save_script(definition("context.set_result({'ran':True})", inputs=[
+        {"name": "proxy", "label": "Saved proxy", "type": "proxy"},
+    ]))
+    run = await runtime.start(script["id"], {"proxy": ""})
+    result = await finished(runtime, run["id"])
+    assert result["status"] == "succeeded"
+
+
+async def test_worker_cannot_fetch_unselected_proxy(runtime):
+    runtime._proxy_resolver = AsyncMock(return_value=PROXY_PRIVATE)
+    script = runtime.store.save_script(proxy_definition("context.proxy_config('efgh5678')"))
+    run = await runtime.start(script["id"], {"proxy": "abcd1234"})
+    result = await finished(runtime, run["id"])
+    assert result["status"] == "failed" and result["error_code"] == "proxy_source_invalid"
+    assert runtime._proxy_resolver.await_args_list == [call("abcd1234")]
+    assert_proxy_private_absent(runtime.store.path.parent)
+
+
+async def test_stop_during_proxy_resolution_prevents_worker_and_further_resolvers(runtime):
+    entered, release = asyncio.Event(), asyncio.Event()
+
+    async def delayed_resolver(proxy_id):
+        entered.set()
+        await release.wait()
+        return PROXY_PRIVATE
+
+    runtime._proxy_resolver = AsyncMock(side_effect=delayed_resolver)
+    script = runtime.store.save_script(definition(
+        "(context.run_dir/'unexpected-action').write_text('changed')", inputs=[
+            {"name": "first", "label": "First proxy", "type": "proxy"},
+            {"name": "second", "label": "Second proxy", "type": "proxy"},
+        ],
+    ))
+    run = await runtime.start(script["id"], {"first": "abcd1234", "second": "efgh5678"})
+    await asyncio.wait_for(entered.wait(), timeout=3)
+    await runtime.stop(run["id"])
+    release.set()
+    result = await finished(runtime, run["id"])
+    assert result["status"] == "cancelled" and result["error_code"] == "stopped"
+    assert runtime._proxy_resolver.await_args_list == [call("abcd1234")]
+    assert not (runtime.root / run["id"] / "unexpected-action").exists()
+    assert [event["kind"] for event in result["events"]] == ["queued", "stopping", "cancelled"]
+    assert_proxy_private_absent(runtime.store.path.parent)
 
 
 async def test_db_script_executes_and_secret_streams_are_never_persisted(runtime):

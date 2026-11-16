@@ -5,6 +5,7 @@ author or run code. Ordinary stdout/stderr never become stored run output.
 """
 
 import contextlib
+import copy
 import json
 import os
 import re
@@ -23,6 +24,7 @@ ERROR_CODES = {
     "interrupted", "dependency_unavailable", "preflight_failed", "invalid_inputs",
     "login_target_changed", "login_field_focus", "login_field_type", "login_page_timeout",
     "login_manual_action", "login_state_unavailable",
+    "missing_proxy_source", "ambiguous_proxy_source", "proxy_source_invalid",
 }
 
 
@@ -44,21 +46,26 @@ class ScriptFailure(Exception):
         self.code = safe_error_code(code)
 
 
-def secret_tokens(definition, inputs, headers=None):
+def secret_tokens(definition, inputs, headers=None, proxy_configs=None):
     values = set()
     for value in (headers or {}).values():
         if isinstance(value, str) and value:
             values.add(value)
             if "=" in value:
                 values.add(value.partition("=")[2])
-    for field in definition.get("inputs", []):
-        if field.get("type") != "secret":
-            continue
-        value = inputs.get(field["name"])
+    private_values = [
+        inputs.get(field["name"]) for field in definition.get("inputs", [])
+        if field.get("type") == "secret"
+    ]
+    for config in (proxy_configs or {}).values():
+        private_values.extend(config.get(name) for name in ("username", "password"))
+    for value in private_values:
         if not isinstance(value, str) or not value:
             continue
         for text in {value, urllib.parse.unquote(value)}:
             values.add(text)
+            values.add(urllib.parse.quote(text, safe=""))
+            values.add(urllib.parse.quote_plus(text, safe=""))
             values.update(part for part in re.split(r"[:\s]+", text) if part)
             if "?" in text:
                 for item in urllib.parse.parse_qs(text.partition("?")[2]).values():
@@ -66,15 +73,34 @@ def secret_tokens(definition, inputs, headers=None):
     return values
 
 
-def safe_result(value, tokens):
+def proxy_secret_tokens(proxy_configs=None):
+    """Complete proxy credentials also need substring filtering when short."""
+    values = set()
+    for config in (proxy_configs or {}).values():
+        for name in ("username", "password"):
+            value = config.get(name)
+            if not isinstance(value, str) or not value:
+                continue
+            for text in {value, urllib.parse.unquote(value)}:
+                values.update({text, urllib.parse.quote(text, safe=""), urllib.parse.quote_plus(text, safe="")})
+    return values
+
+
+def safe_result(value, tokens, strict_tokens=()):
     """Only small, flat metadata is returned; known private values are dropped."""
     if not isinstance(value, dict) or len(value) > 20:
         raise ScriptFailure("worker_protocol_error")
+
+    def contains_private(text):
+        return any((token in text if len(token) >= 4 else token == text) for token in tokens) or any(
+            token in text for token in strict_tokens
+        )
+
     result = {}
     for key, item in value.items():
         if not isinstance(key, str) or not re.fullmatch(r"[a-zA-Z][a-zA-Z0-9_]{0,63}", key):
             raise ScriptFailure("worker_protocol_error")
-        if re.search(r"password|secret|credential|token|email|cookie|account_record", key, re.I):
+        if contains_private(key) or re.search(r"password|secret|credential|token|email|cookie|account_record", key, re.I):
             continue
         if item is not None and type(item) not in (str, bool, int, float):
             raise ScriptFailure("worker_protocol_error")
@@ -89,7 +115,7 @@ def safe_result(value, tokens):
         ):
             continue
         rendered = str(item)
-        if any((token in rendered if len(token) >= 4 else token == rendered) for token in tokens):
+        if contains_private(rendered):
             continue
         result[key] = item
     return result
@@ -116,9 +142,26 @@ class ScriptContext:
         self._headers = packet.get("manager_headers", {})
         if set(self._headers) - {"Cookie", "X-API-Key"}:
             raise ScriptFailure("worker_protocol_error")
+        selected = {
+            self.inputs.get(field["name"])
+            for field in packet["script"].get("inputs", []) if field["type"] == "proxy"
+        }
+        self._proxy_configs = packet.get("proxy_configs", {})
+        self._proxy_errors = packet.get("proxy_errors", {})
+        if (
+            not isinstance(self._proxy_configs, dict)
+            or not isinstance(self._proxy_errors, dict)
+            or set(self._proxy_configs) - selected
+            or set(self._proxy_errors) - selected
+            or set(self._proxy_errors).intersection(self._proxy_configs)
+            or any(code not in {"missing_proxy_source", "proxy_source_invalid"} for code in self._proxy_errors.values())
+            or any(not isinstance(value, dict) for value in self._proxy_configs.values())
+        ):
+            raise ScriptFailure("worker_protocol_error")
         self._emit = emit
         self._stages = {stage["id"] for stage in packet["script"].get("stages", [])}
-        self._tokens = secret_tokens(packet["script"], self.inputs, self._headers)
+        self._tokens = secret_tokens(packet["script"], self.inputs, self._headers, self._proxy_configs)
+        self._proxy_tokens = proxy_secret_tokens(self._proxy_configs)
         self._result = {}
         self._event_count = 0
 
@@ -129,10 +172,20 @@ class ScriptContext:
         self._emit({"kind": "stage", "stage": identifier})
 
     def set_result(self, value):
-        self._result = safe_result(value, self._tokens)
+        self._result = safe_result(value, self._tokens, self._proxy_tokens)
 
     def fail(self, code="script_error"):
         raise ScriptFailure(code)
+
+    def proxy_config(self, proxy_id):
+        """Read only a selected library proxy supplied privately by this run."""
+        if not isinstance(proxy_id, str):
+            raise ScriptFailure("proxy_source_invalid")
+        if proxy_id in self._proxy_errors:
+            raise ScriptFailure(self._proxy_errors[proxy_id])
+        if proxy_id not in self._proxy_configs:
+            raise ScriptFailure("proxy_source_invalid")
+        return copy.deepcopy(self._proxy_configs[proxy_id])
 
     def manager_request(self, path, payload=None, *, timeout=120):
         """Use the current manager's exact origin and this run's transient auth."""

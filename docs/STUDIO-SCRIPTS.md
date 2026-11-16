@@ -63,10 +63,14 @@ can be pasted into the same field; the parser reads it in memory and does not
 open the link.
 
 For a new browser profile, leave **Existing profile** empty. The script selects
-a saved 2Captcha account, chooses a supported California city, and generates a
-new sticky proxy session. If more than one saved proxy account exists, select
-its source profile explicitly. Studio never asks for a proxy password in a
-Terminal prompt and never falls back to proxy credentials from the environment.
+a saved HTTP 2Captcha account from **Proxy library**, chooses a supported
+California city, and generates a new sticky proxy session. Save the account in
+Proxy library first. It remains available when a temporary browser profile goes
+to Trash. A single saved account selects automatically; with several accounts,
+select **Proxy library source** explicitly. A missing, removed, or incomplete
+source stops the run with a fixed proxy error before profile creation. Studio
+never asks for a proxy password in a Terminal prompt or reads one from the
+environment.
 
 The script then:
 
@@ -84,8 +88,9 @@ The script then:
    running and enabled before this run.
 
 To use an existing browser profile, select **Existing profile** and leave
-**Proxy source** and **New profile name** empty. An already running profile uses
-its current window. This does not silently replace an existing signed-in account.
+**New profile name** empty. **Proxy library source** is optional in this mode;
+the existing profile keeps its proxy. An already running profile uses its current
+window. This does not silently replace an existing signed-in account.
 
 The sticky proxy duration defaults to 120 minutes. It is a requested proxy
 session duration, not a permanent address. The optional seed makes mouse-path
@@ -103,6 +108,10 @@ or type, page-load timeout, manual action, and unavailable browser state. Arbitr
 exception text, page content, and credential values are never shown as an error.
 
 Run input is kept in memory and passed to the worker through a private pipe.
+Proxy inputs contain only a saved library ID. The runner resolves selected
+records privately and passes their credentials to the worker in memory; no
+public credential-reading API is added. The form retains only proxy IDs, names,
+and server addresses, and clears account inputs on submission.
 The script definition, database run rows, URLs, process arguments, normal logs,
 and progress events must not contain account values. Printable stdout and
 stderr from the script are not used as a run log. Progress uses the definition's
@@ -114,9 +123,14 @@ recording. The authenticator secret stays local; only a current one-time code is
 sent to X.
 
 **Resume** is an explicit new attempt, not an automatic retry. Enter the account
-record again. Leave new-profile fields empty; the saved receipt owns those setup
-choices. The adapter copies safe recovery metadata into the new attempt's
-private run folder and uses Studio's current connection if its port changed.
+record again. Leave **Existing profile** and **New profile name** empty; the
+saved receipt owns those setup choices. If the receipt is only prepared and has
+no profile ID, select the same Proxy library record saved in that receipt.
+A different or missing selection
+stops recovery. Once the profile exists, Resume uses its saved proxy and does not
+require a library source. The adapter copies safe recovery metadata into the new
+attempt's private run folder and uses Studio's current connection if its port
+changed.
 It reuses the saved profile and does not repeat an uncertain creation.
 
 If desktop creation was interrupted before placement could be confirmed, select
@@ -139,6 +153,7 @@ A script receives a `context` object:
 | `inputs` | Validated input values for this attempt, in memory only |
 | `manager_url` | This Studio process's actual local manager URL |
 | `manager_request(path, payload=None, timeout=120)` | Use the current manager connection without exposing its auth headers |
+| `proxy_config(id)` | Return a private copy of a proxy selected through a `proxy` input; reject any other ID |
 | `run_dir` | Private working folder for this attempt's safe artifacts |
 | `resume_dir` | Prior attempt's folder for an explicitly selected Resume, or `None` |
 | `stage(id)` | Publish one stage ID declared by this definition |
@@ -147,6 +162,9 @@ A script receives a `context` object:
 
 Use input type `secret` for account records and other private values. Do not
 embed a credential in code, defaults, labels, profile names, stages, or output.
+Use input type `proxy` for a Proxy library selector. Mark it optional when an
+existing-profile path does not need a new proxy. Keep resolved credentials in
+memory; never pass them to `set_result` or write them to recovery artifacts.
 The metadata is a definition, not a secret store. Keep browser actions guarded
 by live state and use the existing privacy and per-profile locks when adding
 other account routines.

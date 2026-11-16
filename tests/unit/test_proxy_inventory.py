@@ -12,7 +12,11 @@ from camoufox_pm.core import proxy_check, proxy_inventory
 from camoufox_pm.core.database import StaleWriteError, StorageManager
 from camoufox_pm.core.models import ProxyConfig
 from camoufox_pm.core.profile_manager import ProfileManager
-from camoufox_pm.core.proxy_inventory import ProxyCredentialsUnavailable, ProxyInventory
+from camoufox_pm.core.proxy_inventory import (
+    ProxyCredentialsUnavailable,
+    ProxyInventory,
+    ProxyNotFound,
+)
 
 SECRET = "inventory-secret:@/long"
 VALUES = {
@@ -42,6 +46,19 @@ async def test_password_is_encrypted_and_metadata_never_decrypts(inventory, monk
     assert inventory._secret_config(created["id"]).password == SECRET
     monkeypatch.setattr(proxy_inventory, "decrypt", lambda value: pytest.fail("metadata decrypted"))
     assert (await inventory.list())[0] == created
+
+
+@pytest.mark.asyncio
+async def test_internal_configuration_decrypts_only_selected_proxy_and_returns_copy(inventory):
+    created = await inventory.create(VALUES)
+    config = await inventory.configuration(created["id"])
+    assert config == {key: VALUES[key] for key in ("type", "server", "username", "password", "country")}
+    config["password"] = "changed-local-copy"
+    assert (await inventory.configuration(created["id"]))["password"] == SECRET
+    assert "password" not in (await inventory.list())[0]
+    await inventory.delete(created["id"], 0)
+    with pytest.raises(ProxyNotFound):
+        await inventory.configuration(created["id"])
 
 
 @pytest.mark.asyncio
@@ -86,6 +103,8 @@ async def test_missing_wrong_and_invalid_keys_never_forward_ciphertext(inventory
             await inventory.check(proxy["id"])
         with pytest.raises(ProxyCredentialsUnavailable):
             await inventory.assign(proxy["id"], [{"id": profile.id, "row_version": 0}], 0)
+        with pytest.raises(ProxyCredentialsUnavailable):
+            await inventory.configuration(proxy["id"])
         assert (await inventory.list())[0]["has_password"]
         assert (await inventory.storage.get_profile(profile.id)).proxy is None
     checker.assert_not_called()

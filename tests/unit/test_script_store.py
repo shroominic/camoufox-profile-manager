@@ -71,6 +71,24 @@ def test_required_and_oversized_inputs_are_refused():
         validate_run_inputs(definition(), {"account": "x" * 65537})
 
 
+def test_proxy_inputs_accept_native_library_ids_defaults_and_optional_blanks():
+    script = definition(inputs=[
+        {"name": "proxy", "label": "Saved proxy", "type": "proxy", "default": "abCD1234"},
+        {"name": "optional", "label": "Optional proxy", "type": "proxy"},
+    ])
+    assert validate_run_inputs(script, {}) == {"proxy": "abCD1234", "optional": None}
+    assert validate_run_inputs(script, {"optional": ""})["optional"] is None
+    for value in (True, "short", "proxy.example:8080:user:private", "../abCD1234"):
+        with pytest.raises(ValueError, match="valid saved proxy|bounded text"):
+            validate_run_inputs(script, {"proxy": value})
+    with pytest.raises(ValidationError, match="valid saved proxy"):
+        definition(inputs=[{"name": "proxy", "label": "Proxy", "type": "proxy", "default": "invalid"}])
+    with pytest.raises(ValueError, match="required"):
+        validate_run_inputs(definition(inputs=[{
+            "name": "proxy", "label": "Proxy", "type": "proxy", "required": True,
+        }]), {"proxy": ""})
+
+
 def test_revision_compare_and_swap_prevents_lost_updates(tmp_path):
     store = ScriptStore(tmp_path / "scripts.db")
     script = store.save_script(definition())

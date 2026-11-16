@@ -75,3 +75,32 @@ still present. The definition source was not changed, so revision checks do not
 invalidate an explicit Resume. The failed browser profile was found in Trash;
 it was not restored automatically. The three active user profiles were left
 unchanged. No real login was retried during this correction.
+
+## Permanent proxy source correction, 16 November 2026
+
+The next user-run attempt stopped at proxy selection before creating a profile.
+Its source account existed only in temporary profiles that had moved to Trash.
+The active profile list therefore could not supply that account.
+
+The same account is now saved in the encrypted Proxy library. No trashed profile
+was restored. Signup Script (2), revision 2, uses a generic `proxy` input to
+select the library record. The interface selects a sole record automatically.
+Selected credentials pass to the child in memory and remain absent from run
+inputs, database records, process arguments, and recovery receipts. Receipts
+retain only the library ID. An unused stale optional selection does not block
+existing-profile login; requesting an unavailable source gives a fixed error.
+
+Validation: 278 hybrid toolkit tests, 214 focused manager tests, and all 36 web
+tests passed. TypeScript, targeted ESLint, Ruff, and whitespace checks passed.
+The production static interface rebuilt successfully. Real child-worker and API
+tests cover private library resolution with no source profiles, deleted sources,
+Stop during resolution, selected-only access, and credential filtering in result
+keys and values. The saved account also passed its normal proxy health check.
+
+Studio was closed normally with no active browsers or runs, then reopened
+against the shared store. Its API serves revision 2 with the new proxy selector
+and the sole saved source. The database definition matches the reviewed bundle.
+The three active profile records and two revision-1 failed runs remain unchanged.
+The previous failed profile remains in Trash. The Mac was locked during the
+native display check, so the visible form has not yet been inspected after this
+restart. No real account login was retried or reported as successful.
